@@ -22,19 +22,19 @@ pub type Country {
 
 pub fn main() {
   assert Ok(resp) =
-    graphql.new()
-    |> graphql.set_query(
+    gleamql.new()
+    |> gleamql.set_query(
       "query CountryQuery($code: ID!) {
   country(code: $code) {
     name
   }
 }",
     )
-    |> graphql.set_variable("code", string("GB"))
-    |> graphql.set_host("countries.trevorblades.com")
-    |> graphql.set_path("/graphql")
-    |> graphql.set_header("Content-Type", "application/json")
-    |> graphql.send()
+    |> gleamql.set_variable("code", string("GB"))
+    |> gleamql.set_host("countries.trevorblades.com")
+    |> gleamql.set_path("/graphql")
+    |> gleamql.set_header("Content-Type", "application/json")
+    |> gleamql.send()
 
   assert Ok(data) =
     dynamic.decode1(
@@ -58,7 +58,7 @@ pub fn main() {
 If available on Hex this package can be added to your Gleam project:
 
 ```sh
-gleam add graphql
+gleam add gleamql
 ```
 
-and its documentation can be found at <https://hexdocs.pm/gleeql>.
+and its documentation can be found at <https://hexdocs.pm/gleamql>.

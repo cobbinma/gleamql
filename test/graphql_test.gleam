@@ -22,7 +22,7 @@ pub type Country {
   Country(name: String)
 }
 
-pub fn query_test() {
+pub fn country_query_test() {
   assert Ok(resp) =
     graphql.new()
     |> graphql.set_query(country_query)
@@ -48,7 +48,20 @@ pub fn query_test() {
   assert "United Kingdom" = data.country.name
 }
 
-pub fn bad_request_test() {
+pub fn invalid_query_test() {
+  assert Error(graphql.ErrorMessage(
+    "Variable \"$code\" of required type \"ID!\" was not provided.",
+  )) =
+    graphql.new()
+    |> graphql.set_query(country_query)
+    |> graphql.set_variable("invalid", json.string("invalid"))
+    |> graphql.set_host("countries.trevorblades.com")
+    |> graphql.set_path("/graphql")
+    |> graphql.set_header("Content-Type", "application/json")
+    |> graphql.send()
+}
+
+pub fn method_not_allowed_test() {
   assert Error(graphql.UnexpectedStatus(405)) =
     graphql.new()
     |> graphql.set_query(country_query)

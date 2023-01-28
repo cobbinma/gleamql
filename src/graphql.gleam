@@ -15,14 +15,23 @@ pub type Request {
   )
 }
 
-type Response {
-  Response(data: Dynamic)
-}
-
 pub type GraphQLError {
+  ErrorMessage(message: String)
   UnexpectedStatus(status: Int)
   UnrecognisedResponse(response: String)
   UnknownError(inner: Dynamic)
+}
+
+type GqlSuccess {
+  SuccessResponse(data: Dynamic)
+}
+
+type GqlErrors {
+  ErrorResponse(errors: List(GqlError))
+}
+
+type GqlError {
+  GqlError(message: String)
 }
 
 pub fn new() -> Request {
@@ -74,16 +83,43 @@ pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
     hackney.send(req)
     |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) })
 
-  try _ = check_status(resp.status)
-
   let response_decoder =
-    dynamic.decode1(Response, field("data", of: dynamic.dynamic))
+    dynamic.decode1(SuccessResponse, field("data", of: dynamic.dynamic))
 
-  try response =
-    json.decode(from: resp.body, using: response_decoder)
-    |> result.map_error(fn(_) { UnrecognisedResponse(response: resp.body) })
+  let errors_decoder =
+    dynamic.decode1(
+      ErrorResponse,
+      field(
+        "errors",
+        of: dynamic.list(of: dynamic.decode1(
+          GqlError,
+          field("message", dynamic.string),
+        )),
+      ),
+    )
 
-  Ok(response.data)
+  case
+    resp.status
+    |> status_is_ok
+  {
+    True ->
+      case json.decode(from: resp.body, using: response_decoder) {
+        Ok(data) -> Ok(data.data)
+        Error(_) -> Error(UnrecognisedResponse(response: resp.body))
+      }
+    False ->
+      case json.decode(from: resp.body, using: errors_decoder) {
+        Ok(errors) ->
+          case
+            errors.errors
+            |> list.first
+          {
+            Ok(error) -> Error(ErrorMessage(message: error.message))
+            Error(_) -> Error(UnrecognisedResponse(response: resp.body))
+          }
+        Error(_) -> Error(UnexpectedStatus(resp.status))
+      }
+  }
 }
 
 pub fn set_host(req: Request, host: String) -> Request {
@@ -110,9 +146,6 @@ pub fn set_header(req: Request, key: String, value: String) -> Request {
   )
 }
 
-fn check_status(status: Int) -> Result(Nil, GraphQLError) {
-  case status == 200 {
-    True -> Ok(Nil)
-    False -> Error(UnexpectedStatus(status: status))
-  }
+fn status_is_ok(status: Int) -> Bool {
+  status == 200
 }

@@ -19,6 +19,12 @@ type Response {
   Response(data: Dynamic)
 }
 
+pub type GraphQLError {
+  UnexpectedStatus(status: Int)
+  UnrecognisedResponse(response: String)
+  UnknownError(inner: Dynamic)
+}
+
 pub fn new() -> Request {
   Request(
     http_request: request.new()
@@ -42,7 +48,7 @@ pub fn set_variable(req: Request, key: String, value: Json) -> Request {
   Request(..req, variables: Some(variables))
 }
 
-pub fn send(req: Request) -> Result(Dynamic, Dynamic) {
+pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
   let req =
     req.http_request
     |> request.set_body(
@@ -66,14 +72,16 @@ pub fn send(req: Request) -> Result(Dynamic, Dynamic) {
 
   try resp =
     hackney.send(req)
-    |> result.map_error(fn(e) { dynamic.from(e) })
+    |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) })
+
+  try _ = check_status(resp.status)
 
   let response_decoder =
     dynamic.decode1(Response, field("data", of: dynamic.dynamic))
 
-  assert Ok(response) =
+  try response =
     json.decode(from: resp.body, using: response_decoder)
-    |> result.map_error(fn(e) { dynamic.from(e) })
+    |> result.map_error(fn(_) { UnrecognisedResponse(response: resp.body) })
 
   Ok(response.data)
 }
@@ -100,4 +108,11 @@ pub fn set_header(req: Request, key: String, value: String) -> Request {
     http_request: req.http_request
     |> request.set_header(key, value),
   )
+}
+
+fn check_status(status: Int) -> Result(Nil, GraphQLError) {
+  case status == 200 {
+    True -> Ok(Nil)
+    False -> Error(UnexpectedStatus(status: status))
+  }
 }

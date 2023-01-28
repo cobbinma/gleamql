@@ -7,6 +7,13 @@ pub fn main() {
   gleeunit.main()
 }
 
+const country_query = "query CountryQuery($code: ID!) {
+  country(code: $code) {
+    name
+  }
+}
+"
+
 pub type Data {
   Data(country: Country)
 }
@@ -18,14 +25,7 @@ pub type Country {
 pub fn query_test() {
   assert Ok(resp) =
     graphql.new()
-    |> graphql.set_query(
-      "query CountryQuery($code: ID!) {
-  country(code: $code) {
-    name
-  }
-}
-",
-    )
+    |> graphql.set_query(country_query)
     |> graphql.set_variable("code", json.string("GB"))
     |> graphql.set_host("countries.trevorblades.com")
     |> graphql.set_path("/graphql")
@@ -46,4 +46,22 @@ pub fn query_test() {
     )
 
   assert "United Kingdom" = data.country.name
+}
+
+pub fn bad_request_test() {
+  assert Error(graphql.UnexpectedStatus(405)) =
+    graphql.new()
+    |> graphql.set_query(country_query)
+    |> graphql.set_variable("code", json.string("GB"))
+    |> graphql.set_host("google.com")
+    |> graphql.send()
+}
+
+pub fn invalid_server_test() {
+  assert Error(graphql.UnknownError(_)) =
+    graphql.new()
+    |> graphql.set_query(country_query)
+    |> graphql.set_variable("code", json.string("GB"))
+    |> graphql.set_host("unknown")
+    |> graphql.send()
 }

@@ -104,14 +104,14 @@ pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
   {
     True ->
       case json.decode(from: resp.body, using: response_decoder) {
-        Ok(data) -> Ok(data.data)
+        Ok(response) -> Ok(response.data)
         Error(_) -> Error(UnrecognisedResponse(response: resp.body))
       }
     False ->
       case json.decode(from: resp.body, using: errors_decoder) {
-        Ok(errors) ->
+        Ok(response) ->
           case
-            errors.errors
+            response.errors
             |> list.first
           {
             Ok(error) -> Error(ErrorMessage(message: error.message))

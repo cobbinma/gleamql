@@ -5,7 +5,7 @@
 
 Simple Graphql Client Written In Gleam ✨
 
-## Installation
+## Usage
 
 ```gleam
 import gleamql

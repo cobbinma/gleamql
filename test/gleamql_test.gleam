@@ -11,8 +11,7 @@ const country_query = "query CountryQuery($code: ID!) {
   country(code: $code) {
     name
   }
-}
-"
+}"
 
 pub type Data {
   Data(country: Country)
@@ -32,20 +31,18 @@ pub fn country_query_test() {
     |> gleamql.set_header("Content-Type", "application/json")
     |> gleamql.send()
 
-  assert Ok(data) =
-    dynamic.decode1(
+  assert Ok(Data(country: Country(name: "United Kingdom"))) =
+    resp
+    |> dynamic.decode1(
       Data,
       field(
         "country",
         of: fn(country) {
-          dynamic.decode1(Country, field("name", of: string))(country)
+          country
+          |> dynamic.decode1(Country, field("name", of: string))
         },
       ),
-    )(
-      resp,
     )
-
-  assert "United Kingdom" = data.country.name
 }
 
 pub fn invalid_query_test() {

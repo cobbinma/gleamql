@@ -5,7 +5,7 @@ version = "0.1.0"
 # your project to the Hex package manager.
 #
 licences = ["Apache-2.0"]
-description = "simple graphql client written in gleam ✨"
+description = "A Simple Graphql Client Written In Gleam ✨"
 repository = { type = "github", user = "cobbinma", repo = "gleamql" }
 links = [{ title = "Website", href = "https://gleam.run" }]
 

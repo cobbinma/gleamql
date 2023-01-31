@@ -7,12 +7,6 @@ pub fn main() {
   gleeunit.main()
 }
 
-const country_query = "query CountryQuery($code: ID!) {
-  country(code: $code) {
-    name
-  }
-}"
-
 pub type Data {
   Data(country: Country)
 }
@@ -20,6 +14,12 @@ pub type Data {
 pub type Country {
   Country(name: String)
 }
+
+const country_query = "query CountryQuery($code: ID!) {
+  country(code: $code) {
+    name
+  }
+}"
 
 pub fn country_query_test() {
   assert Ok(resp) =
@@ -73,5 +73,30 @@ pub fn invalid_server_test() {
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("unknown")
+    |> gleamql.send()
+}
+
+pub fn mutation_test() {
+  assert Ok(_) =
+    gleamql.new()
+    |> gleamql.set_query(
+      "mutation (
+  $input: CreatePostInput!
+) {
+  createPost(input: $input) {
+    id
+  }
+}",
+    )
+    |> gleamql.set_variable(
+      "input",
+      json.object([
+        #("title", json.string("A Very Captivating Post Title")),
+        #("body", json.string("Some interesting content.")),
+      ]),
+    )
+    |> gleamql.set_host("graphqlzero.almansi.me")
+    |> gleamql.set_path("/api")
+    |> gleamql.set_header("Content-Type", "application/json")
     |> gleamql.send()
 }

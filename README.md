@@ -12,6 +12,7 @@ import gleamql
 import gleam/json.{string}
 import gleam/dynamic.{field}
 import gleam/option.{Some}
+import gleam/hackney
 
 pub type Data {
   Data(country: Country)
@@ -45,7 +46,7 @@ pub fn main() {
         },
       ),
     ))
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }
 ```
 

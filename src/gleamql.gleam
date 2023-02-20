@@ -1,6 +1,6 @@
 import gleam/http/request
+import gleam/http/response
 import gleam/dynamic.{Decoder, Dynamic, field}
-import gleam/hackney
 import gleam/http.{Post}
 import gleam/json.{Json, object}
 import gleam/option.{None, Option, Some}
@@ -59,7 +59,10 @@ pub fn set_variable(req: Request(t), key: String, value: Json) -> Request(t) {
   Request(..req, variables: Some(variables))
 }
 
-pub fn send(req: Request(t)) -> Result(Option(t), GraphQLError) {
+pub fn send(
+  req: Request(t),
+  send: fn(request.Request(String)) -> Result(response.Response(String), b),
+) -> Result(Option(t), GraphQLError) {
   let request =
     req.http_request
     |> request.set_body(
@@ -82,7 +85,8 @@ pub fn send(req: Request(t)) -> Result(Option(t), GraphQLError) {
     )
 
   try resp =
-    hackney.send(request)
+    request
+    |> send
     |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) })
 
   let errors_decoder =

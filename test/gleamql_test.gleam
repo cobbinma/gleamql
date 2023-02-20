@@ -3,6 +3,7 @@ import gleamql
 import gleam/json
 import gleam/dynamic.{field, string}
 import gleam/option.{Some}
+import gleam/hackney
 
 pub fn main() {
   gleeunit.main()
@@ -40,7 +41,7 @@ pub fn country_query_test() {
         },
       ),
     ))
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }
 
 pub fn invalid_query_test() {
@@ -53,7 +54,7 @@ pub fn invalid_query_test() {
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
     |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }
 
 pub fn method_not_allowed_test() {
@@ -62,7 +63,7 @@ pub fn method_not_allowed_test() {
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("google.com")
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }
 
 pub fn invalid_server_test() {
@@ -71,7 +72,7 @@ pub fn invalid_server_test() {
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("unknown")
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }
 
 pub fn mutation_test() {
@@ -96,5 +97,5 @@ pub fn mutation_test() {
     |> gleamql.set_host("graphqlzero.almansi.me")
     |> gleamql.set_path("/api")
     |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.send()
+    |> gleamql.send(hackney.send)
 }

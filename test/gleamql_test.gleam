@@ -2,6 +2,7 @@ import gleeunit
 import gleamql
 import gleam/json
 import gleam/dynamic.{field, string}
+import gleam/option.{Some}
 
 pub fn main() {
   gleeunit.main()
@@ -22,18 +23,14 @@ const country_query = "query CountryQuery($code: ID!) {
 }"
 
 pub fn country_query_test() {
-  assert Ok(resp) =
+  assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
     |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.send()
-
-  assert Ok(Data(country: Country(name: "United Kingdom"))) =
-    resp
-    |> dynamic.decode1(
+    |> gleamql.decode(dynamic.decode1(
       Data,
       field(
         "country",
@@ -42,7 +39,8 @@ pub fn country_query_test() {
           |> dynamic.decode1(Country, field("name", of: string))
         },
       ),
-    )
+    ))
+    |> gleamql.send()
 }
 
 pub fn invalid_query_test() {

@@ -1,5 +1,5 @@
 import gleam/http/request
-import gleam/dynamic.{Dynamic, field}
+import gleam/dynamic.{Decoder, Dynamic, field}
 import gleam/hackney
 import gleam/http.{Post}
 import gleam/json.{Json, object}
@@ -7,11 +7,12 @@ import gleam/option.{None, Option, Some}
 import gleam/result
 import gleam/list
 
-pub type Request {
+pub type Request(t) {
   Request(
     http_request: request.Request(String),
     query: Option(String),
     variables: Option(List(#(String, Json))),
+    decoder: Option(Decoder(t)),
   )
 }
 
@@ -22,8 +23,8 @@ pub type GraphQLError {
   UnknownError(inner: Dynamic)
 }
 
-type GqlSuccess {
-  SuccessResponse(data: Dynamic)
+type GqlSuccess(t) {
+  SuccessResponse(data: t)
 }
 
 type GqlErrors {
@@ -34,20 +35,21 @@ type GqlError {
   GqlError(message: String)
 }
 
-pub fn new() -> Request {
+pub fn new() -> Request(t) {
   Request(
     http_request: request.new()
     |> request.set_method(Post),
     query: None,
     variables: None,
+    decoder: None,
   )
 }
 
-pub fn set_query(req: Request, query: String) -> Request {
+pub fn set_query(req: Request(t), query: String) -> Request(t) {
   Request(..req, query: Some(query))
 }
 
-pub fn set_variable(req: Request, key: String, value: Json) -> Request {
+pub fn set_variable(req: Request(t), key: String, value: Json) -> Request(t) {
   let variables = [
     #(key, value),
     ..req.variables
@@ -57,8 +59,8 @@ pub fn set_variable(req: Request, key: String, value: Json) -> Request {
   Request(..req, variables: Some(variables))
 }
 
-pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
-  let req =
+pub fn send(req: Request(t)) -> Result(Option(t), GraphQLError) {
+  let request =
     req.http_request
     |> request.set_body(
       object([
@@ -80,11 +82,8 @@ pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
     )
 
   try resp =
-    hackney.send(req)
+    hackney.send(request)
     |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) })
-
-  let response_decoder =
-    dynamic.decode1(SuccessResponse, field("data", of: dynamic.dynamic))
 
   let errors_decoder =
     dynamic.decode1(
@@ -103,9 +102,21 @@ pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
     |> status_is_ok
   {
     True ->
-      case json.decode(from: resp.body, using: response_decoder) {
-        Ok(response) -> Ok(response.data)
-        Error(_) -> Error(UnrecognisedResponse(response: resp.body))
+      case req.decoder {
+        Some(decoder) ->
+          case
+            json.decode(
+              from: resp.body,
+              using: dynamic.decode1(
+                SuccessResponse,
+                field("data", of: decoder),
+              ),
+            )
+          {
+            Ok(response) -> Ok(Some(response.data))
+            Error(_) -> Error(UnrecognisedResponse(response: resp.body))
+          }
+        None -> Ok(None)
       }
     False ->
       case json.decode(from: resp.body, using: errors_decoder) {
@@ -122,7 +133,7 @@ pub fn send(req: Request) -> Result(Dynamic, GraphQLError) {
   }
 }
 
-pub fn set_host(req: Request, host: String) -> Request {
+pub fn set_host(req: Request(t), host: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
@@ -130,7 +141,7 @@ pub fn set_host(req: Request, host: String) -> Request {
   )
 }
 
-pub fn set_path(req: Request, path: String) -> Request {
+pub fn set_path(req: Request(t), path: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
@@ -138,7 +149,7 @@ pub fn set_path(req: Request, path: String) -> Request {
   )
 }
 
-pub fn set_header(req: Request, key: String, value: String) -> Request {
+pub fn set_header(req: Request(t), key: String, value: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
@@ -148,4 +159,8 @@ pub fn set_header(req: Request, key: String, value: String) -> Request {
 
 fn status_is_ok(status: Int) -> Bool {
   status == 200
+}
+
+pub fn decode(req: Request(t), decoder: dynamic.Decoder(t)) -> Request(t) {
+  Request(..req, decoder: Some(decoder))
 }

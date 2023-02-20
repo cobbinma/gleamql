@@ -11,6 +11,7 @@ A Simple Graphql Client Written In Gleam ✨
 import gleamql
 import gleam/json.{string}
 import gleam/dynamic.{field}
+import gleam/option.{Some}
 
 pub type Data {
   Data(country: Country)
@@ -27,18 +28,14 @@ const country_query = "query CountryQuery($code: ID!) {
 }"
 
 pub fn main() {
-  assert Ok(resp) =
+  assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
     |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.send()
-
-  assert Ok(Data(country: Country(name: "United Kingdom"))) =
-    resp
-    |> dynamic.decode1(
+    |> gleamql.decode(dynamic.decode1(
       Data,
       field(
         "country",
@@ -47,7 +44,8 @@ pub fn main() {
           |> dynamic.decode1(Country, field("name", of: string))
         },
       ),
-    )
+    ))
+    |> gleamql.send()
 }
 ```
 

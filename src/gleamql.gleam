@@ -1,3 +1,26 @@
+//// Query a GraphQL server with `gleamql`.
+////
+//// ```gleam
+//// gleamql.new()
+//// |> gleamql.set_query(country_query)
+//// |> gleamql.set_variable("code", json.string("GB"))
+//// |> gleamql.set_host("countries.trevorblades.com")
+//// |> gleamql.set_path("/graphql")
+//// |> gleamql.set_header("Content-Type", "application/json")
+//// |> gleamql.set_decoder(dynamic.decode1(
+////   Data,
+////   field(
+////     "country",
+////     of: fn(country) {
+////       country
+////       |> dynamic.decode1(Country, field("name", of: string))
+////     },
+////   ),
+//// ))
+//// |> gleamql.send(hackney.send)
+//// ```
+////
+
 import gleam/http/request
 import gleam/http/response
 import gleam/dynamic.{Decoder, Dynamic, field}
@@ -7,6 +30,8 @@ import gleam/option.{None, Option, Some}
 import gleam/result
 import gleam/list
 
+/// GleamQL Request
+///
 pub type Request(t) {
   Request(
     http_request: request.Request(String),
@@ -16,6 +41,8 @@ pub type Request(t) {
   )
 }
 
+/// GleamQL Error
+///
 pub type GraphQLError {
   ErrorMessage(message: String)
   UnexpectedStatus(status: Int)
@@ -35,6 +62,10 @@ type GqlError {
   GqlError(message: String)
 }
 
+/// Construct a GleamQL Request
+///
+/// Use with set functions to customise.
+///
 pub fn new() -> Request(t) {
   Request(
     http_request: request.new()
@@ -45,10 +76,18 @@ pub fn new() -> Request(t) {
   )
 }
 
+/// Set the query of the request
+///
 pub fn set_query(req: Request(t), query: String) -> Request(t) {
   Request(..req, query: Some(query))
 }
 
+/// Set a variable that is needed in the request query
+///
+/// ```gleam
+/// gleamql.set_variable("code", json.string("GB"))
+/// ```
+///
 pub fn set_variable(req: Request(t), key: String, value: Json) -> Request(t) {
   let variables = [
     #(key, value),
@@ -59,6 +98,10 @@ pub fn set_variable(req: Request(t), key: String, value: Json) -> Request(t) {
   Request(..req, variables: Some(variables))
 }
 
+/// Send the built request to a GraphQL server.
+///
+/// A HTTP client is needed to send the request, see https://github.com/gleam-lang/http#client-adapters.
+///
 pub fn send(
   req: Request(t),
   send: fn(request.Request(String)) -> Result(response.Response(String), b),
@@ -137,6 +180,12 @@ pub fn send(
   }
 }
 
+/// Set the host of the request.
+///
+/// ```gleam
+/// gleamql.set_host("countries.trevorblades.com")
+/// ```
+///
 pub fn set_host(req: Request(t), host: String) -> Request(t) {
   Request(
     ..req,
@@ -145,6 +194,12 @@ pub fn set_host(req: Request(t), host: String) -> Request(t) {
   )
 }
 
+/// Set the path of the request.
+///
+/// ```gleam
+/// gleamql.set_path("/graphql")
+/// ```
+///
 pub fn set_path(req: Request(t), path: String) -> Request(t) {
   Request(
     ..req,
@@ -153,6 +208,14 @@ pub fn set_path(req: Request(t), path: String) -> Request(t) {
   )
 }
 
+/// Set the header with the given value under the given header key.
+///
+/// If already present, it is replaced.
+///
+/// ```gleam
+/// gleamql.set_header("Content-Type", "application/json")
+/// ```
+///
 pub fn set_header(req: Request(t), key: String, value: String) -> Request(t) {
   Request(
     ..req,
@@ -165,6 +228,23 @@ fn status_is_ok(status: Int) -> Bool {
   status == 200
 }
 
-pub fn decode(req: Request(t), decoder: dynamic.Decoder(t)) -> Request(t) {
+/// Set the decoder that will be used to deserialize the graphql response.
+///
+/// If not given, the response will not be deserialized.
+///
+/// ```gleam
+/// gleamql.set_decoder(dynamic.decode1(
+///   Data,
+///   field(
+///     "country",
+///     of: fn(country) {
+///       country
+///       |> dynamic.decode1(Country, field("name", of: string))
+///     },
+///   ),
+/// ))
+/// ```
+///
+pub fn set_decoder(req: Request(t), decoder: dynamic.Decoder(t)) -> Request(t) {
   Request(..req, decoder: Some(decoder))
 }

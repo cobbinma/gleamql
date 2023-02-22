@@ -36,7 +36,7 @@ pub fn main() {
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
     |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.decode(dynamic.decode1(
+    |> gleamql.set_decoder(dynamic.decode1(
       Data,
       field(
         "country",

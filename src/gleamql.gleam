@@ -127,10 +127,11 @@ pub fn send(
       |> json.to_string,
     )
 
-  try resp =
+  use resp <- result.then(
     request
     |> send
-    |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) })
+    |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) }),
+  )
 
   let errors_decoder =
     dynamic.decode1(

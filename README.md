@@ -29,7 +29,7 @@ const country_query = "query CountryQuery($code: ID!) {
 }"
 
 pub fn main() {
-  assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
+  let assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))

@@ -24,7 +24,7 @@ const country_query = "query CountryQuery($code: ID!) {
 }"
 
 pub fn country_query_test() {
-  assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
+  let assert Ok(Some(Data(country: Country(name: "United Kingdom")))) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
@@ -45,7 +45,7 @@ pub fn country_query_test() {
 }
 
 pub fn invalid_query_test() {
-  assert Error(gleamql.ErrorMessage(
+  let assert Error(gleamql.ErrorMessage(
     "Variable \"$code\" of required type \"ID!\" was not provided.",
   )) =
     gleamql.new()
@@ -58,7 +58,7 @@ pub fn invalid_query_test() {
 }
 
 pub fn method_not_allowed_test() {
-  assert Error(gleamql.UnexpectedStatus(405)) =
+  let assert Error(gleamql.UnexpectedStatus(405)) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
@@ -67,7 +67,7 @@ pub fn method_not_allowed_test() {
 }
 
 pub fn invalid_server_test() {
-  assert Error(gleamql.UnknownError(_)) =
+  let assert Error(gleamql.UnknownError(_)) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
@@ -76,7 +76,7 @@ pub fn invalid_server_test() {
 }
 
 pub fn mutation_test() {
-  assert Ok(_) =
+  let assert Ok(_) =
     gleamql.new()
     |> gleamql.set_query(
       "mutation (

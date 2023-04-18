@@ -40,10 +40,7 @@ pub fn main() {
       Data,
       field(
         "country",
-        of: fn(country) {
-          country
-          |> dynamic.decode1(Country, field("name", of: string))
-        },
+        of: dynamic.decode1(Country, field("name", of: string)),
       ),
     ))
     |> gleamql.send(hackney.send)

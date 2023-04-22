@@ -9,13 +9,7 @@
 //// |> gleamql.set_header("Content-Type", "application/json")
 //// |> gleamql.set_decoder(dynamic.decode1(
 ////   Data,
-////   field(
-////     "country",
-////     of: fn(country) {
-////       country
-////       |> dynamic.decode1(Country, field("name", of: string))
-////     },
-////   ),
+////   field("country", of: dynamic.decode1(Country, field("name", of: string))),
 //// ))
 //// |> gleamql.send(hackney.send)
 //// ```
@@ -236,13 +230,7 @@ fn status_is_ok(status: Int) -> Bool {
 /// ```gleam
 /// gleamql.set_decoder(dynamic.decode1(
 ///   Data,
-///   field(
-///     "country",
-///     of: fn(country) {
-///       country
-///       |> dynamic.decode1(Country, field("name", of: string))
-///     },
-///   ),
+///   field("country", of: dynamic.decode1(Country, field("name", of: string))),
 /// ))
 /// ```
 ///

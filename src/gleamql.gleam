@@ -17,10 +17,10 @@
 
 import gleam/http/request
 import gleam/http/response
-import gleam/dynamic.{Decoder, Dynamic, field}
+import gleam/dynamic.{type Decoder, type Dynamic, field}
 import gleam/http.{Post}
-import gleam/json.{Json, object}
-import gleam/option.{None, Option, Some}
+import gleam/json.{type Json, object}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/list
 

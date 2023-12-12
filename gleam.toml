@@ -8,6 +8,7 @@ licences = ["Apache-2.0"]
 description = "A Simple Graphql Client Written In Gleam ✨"
 repository = { type = "github", user = "cobbinma", repo = "gleamql" }
 links = [{ title = "Website", href = "https://gleam.run" }]
+gleam = ">= 0.32.0"
 
 [dependencies]
 gleam_stdlib = "~> 0.25"
@@ -17,3 +18,4 @@ glint = "~> 0.10"
 [dev-dependencies]
 gleeunit = "~> 0.7"
 gleam_hackney = "~> 1.0"
+gleam_http = "~> 3.5"

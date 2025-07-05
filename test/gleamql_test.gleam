@@ -1,4 +1,4 @@
-import gleam/dynamic/decode.{field}
+import gleam/dynamic/decode
 import gleam/hackney
 import gleam/json
 import gleam/option.{Some}
@@ -32,8 +32,8 @@ pub fn country_query_test() {
     |> gleamql.set_path("/graphql")
     |> gleamql.set_default_content_type_header()
     |> gleamql.set_decoder({
-      use country <- field("country", {
-        use name <- field("name", decode.string)
+      use country <- decode.field("country", {
+        use name <- decode.field("name", decode.string)
         decode.success(Country(name:))
       })
       decode.success(Data(country:))

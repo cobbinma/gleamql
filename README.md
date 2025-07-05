@@ -10,7 +10,7 @@ A Simple Graphql Client Written In Gleam ✨
 ```gleam
 import gleamql
 import gleam/json.{string}
-import gleam/dynamic.{field}
+import gleam/dynamic/decode
 import gleam/option.{Some}
 import gleam/hackney
 
@@ -35,11 +35,14 @@ pub fn main() {
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
-    |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.set_decoder(dynamic.decode1(
-      Data,
-      field("country", of: dynamic.decode1(Country, field("name", of: string))),
-    ))
+    |> gleamql.set_default_content_type_header()
+    |> gleamql.set_decoder({
+      use country <- decode.field("country", {
+        use name <- decode.field("name", decode.string)
+        decode.success(Country(name:))
+      })
+      decode.success(Data(country:))
+    })
     |> gleamql.send(hackney.send)
 }
 ```

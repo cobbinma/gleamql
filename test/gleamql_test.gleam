@@ -1,9 +1,9 @@
-import gleeunit
-import gleamql
-import gleam/json
-import gleam/dynamic.{field, string}
-import gleam/option.{Some}
+import gleam/dynamic/decode.{field}
 import gleam/hackney
+import gleam/json
+import gleam/option.{Some}
+import gleamql
+import gleeunit
 
 pub fn main() {
   gleeunit.main()
@@ -30,11 +30,14 @@ pub fn country_query_test() {
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
-    |> gleamql.set_header("Content-Type", "application/json")
-    |> gleamql.set_decoder(dynamic.decode1(
-      Data,
-      field("country", of: dynamic.decode1(Country, field("name", of: string))),
-    ))
+    |> gleamql.set_default_content_type_header()
+    |> gleamql.set_decoder({
+      use country <- field("country", {
+        use name <- field("name", decode.string)
+        decode.success(Country(name:))
+      })
+      decode.success(Data(country:))
+    })
     |> gleamql.send(hackney.send)
 }
 
@@ -47,7 +50,7 @@ pub fn invalid_query_test() {
     |> gleamql.set_variable("invalid", json.string("invalid"))
     |> gleamql.set_host("countries.trevorblades.com")
     |> gleamql.set_path("/graphql")
-    |> gleamql.set_header("Content-Type", "application/json")
+    |> gleamql.set_default_content_type_header()
     |> gleamql.send(hackney.send)
 }
 
@@ -57,15 +60,18 @@ pub fn method_not_allowed_test() {
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
     |> gleamql.set_host("google.com")
+    |> gleamql.set_default_content_type_header()
     |> gleamql.send(hackney.send)
 }
 
-pub fn invalid_server_test() {
-  let assert Error(gleamql.UnknownError(_)) =
+pub fn invalid_header_content_type_test() {
+  let assert Error(gleamql.UnexpectedStatus(415)) =
     gleamql.new()
     |> gleamql.set_query(country_query)
     |> gleamql.set_variable("code", json.string("GB"))
-    |> gleamql.set_host("unknown")
+    |> gleamql.set_host("countries.trevorblades.com")
+    |> gleamql.set_path("/graphql")
+    |> gleamql.set_header("Content-Type", "text/html")
     |> gleamql.send(hackney.send)
 }
 

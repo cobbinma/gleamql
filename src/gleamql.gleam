@@ -15,14 +15,14 @@
 //// ```
 ////
 
-import gleam/http/request
-import gleam/http/response
-import gleam/dynamic.{type Decoder, type Dynamic, field}
+import gleam/dynamic/decode.{type Decoder, field}
 import gleam/http.{Post}
+import gleam/http/request
+import gleam/http/response.{type Response}
 import gleam/json.{type Json, object}
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/list
 
 /// GleamQL Request
 ///
@@ -41,7 +41,7 @@ pub type GraphQLError {
   ErrorMessage(message: String)
   UnexpectedStatus(status: Int)
   UnrecognisedResponse(response: String)
-  UnknownError(inner: Dynamic)
+  UnknownError
 }
 
 type GqlSuccess(t) {
@@ -63,7 +63,7 @@ type GqlError {
 pub fn new() -> Request(t) {
   Request(
     http_request: request.new()
-    |> request.set_method(Post),
+      |> request.set_method(Post),
     query: None,
     variables: None,
     decoder: None,
@@ -107,8 +107,8 @@ pub fn send(
         #(
           "query",
           req.query
-          |> option.unwrap("")
-          |> json.string,
+            |> option.unwrap("")
+            |> json.string,
         ),
         #(
           "variables",
@@ -121,57 +121,65 @@ pub fn send(
       |> json.to_string,
     )
 
-  use resp <- result.then(
+  use resp <- result.try(
     request
     |> send
-    |> result.map_error(fn(e) { UnknownError(inner: dynamic.from(e)) }),
+    |> result.map_error(fn(_) { UnknownError }),
   )
-
-  let errors_decoder =
-    dynamic.decode1(
-      ErrorResponse,
-      field(
-        "errors",
-        of: dynamic.list(of: dynamic.decode1(
-          GqlError,
-          field("message", dynamic.string),
-        )),
-      ),
-    )
 
   case
     resp.status
     |> status_is_ok
   {
-    True ->
-      case req.decoder {
-        Some(decoder) ->
-          case
-            json.decode(
-              from: resp.body,
-              using: dynamic.decode1(
-                SuccessResponse,
-                field("data", of: decoder),
-              ),
-            )
-          {
-            Ok(response) -> Ok(Some(response.data))
-            Error(_) -> Error(UnrecognisedResponse(response: resp.body))
-          }
-        None -> Ok(None)
+    True -> handle_status_ok(req, resp)
+    False -> handle_status_not_ok(resp)
+  }
+}
+
+fn handle_status_ok(
+  req: Request(t),
+  resp: Response(String),
+) -> Result(Option(t), GraphQLError) {
+  case req.decoder {
+    Some(decoder) ->
+      case
+        json.parse(from: resp.body, using: {
+          use data <- decode.field("data", decoder)
+          decode.success(SuccessResponse(data:))
+        })
+      {
+        Ok(response) -> Ok(Some(response.data))
+        Error(_) -> Error(UnrecognisedResponse(response: resp.body))
       }
-    False ->
-      case json.decode(from: resp.body, using: errors_decoder) {
-        Ok(response) ->
-          case
-            response.errors
-            |> list.first
-          {
-            Ok(error) -> Error(ErrorMessage(message: error.message))
-            Error(_) -> Error(UnrecognisedResponse(response: resp.body))
-          }
-        Error(_) -> Error(UnexpectedStatus(resp.status))
+    None -> Ok(None)
+  }
+}
+
+fn handle_status_not_ok(
+  resp: Response(String),
+) -> Result(Option(t), GraphQLError) {
+  case
+    json.parse(from: resp.body, using: {
+      use errors <- field(
+        "errors",
+        decode.list(of: {
+          use message <- field("message", decode.string)
+          decode.success(GqlError(message:))
+        }),
+      )
+
+      decode.success(ErrorResponse(errors:))
+    })
+  {
+    Ok(response) ->
+      case
+        response.errors
+        |> list.first
+      {
+        Ok(error) -> Error(ErrorMessage(message: error.message))
+        Error(_) -> Error(UnrecognisedResponse(response: resp.body))
       }
+    Error(_) -> Error(UnexpectedStatus(resp.status))
   }
 }
 
@@ -185,7 +193,7 @@ pub fn set_host(req: Request(t), host: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
-    |> request.set_host(host),
+      |> request.set_host(host),
   )
 }
 
@@ -199,7 +207,7 @@ pub fn set_path(req: Request(t), path: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
-    |> request.set_path(path),
+      |> request.set_path(path),
   )
 }
 
@@ -215,7 +223,23 @@ pub fn set_header(req: Request(t), key: String, value: String) -> Request(t) {
   Request(
     ..req,
     http_request: req.http_request
-    |> request.set_header(key, value),
+      |> request.set_header(key, value),
+  )
+}
+
+/// Set the `Content-Type` header to `application/json`
+///
+/// If already present, it is replaced.
+///
+/// ```gleam
+/// gleamql.set_default_content_type_header()
+/// ```
+///
+pub fn set_default_content_type_header(req: Request(t)) -> Request(t) {
+  Request(
+    ..req,
+    http_request: req.http_request
+      |> request.set_header("Content-Type", "application/json"),
   )
 }
 
@@ -234,6 +258,6 @@ fn status_is_ok(status: Int) -> Bool {
 /// ))
 /// ```
 ///
-pub fn set_decoder(req: Request(t), decoder: dynamic.Decoder(t)) -> Request(t) {
+pub fn set_decoder(req: Request(t), decoder: decode.Decoder(t)) -> Request(t) {
   Request(..req, decoder: Some(decoder))
 }

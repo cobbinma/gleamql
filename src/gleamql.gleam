@@ -261,3 +261,18 @@ fn status_is_ok(status: Int) -> Bool {
 pub fn set_decoder(req: Request(t), decoder: decode.Decoder(t)) -> Request(t) {
   Request(..req, decoder: Some(decoder))
 }
+
+/// Set the schema of the request.
+///
+/// ```gleam
+/// import gleam/http
+/// gleamql.set_schema(http.Http)
+/// ```
+///
+pub fn set_scheme(req: Request(t), scheme: http.Scheme) -> Request(t) {
+  Request(
+    ..req,
+    http_request: req.http_request
+      |> request.set_scheme(scheme),
+  )
+}

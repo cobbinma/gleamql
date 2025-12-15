@@ -9,8 +9,6 @@ A GraphQL client library for Gleam that builds queries and decoders simultaneous
 
 gleamql is a type-safe GraphQL client for Gleam that uses a builder pattern to construct GraphQL operations and their response decoders at the same time. This ensures your queries and decoders can never get out of sync.
 
-Inspired by [gleam-community/codec](https://github.com/gleam-community/codec), gleamql uses a codec-style API where you define the structure once and get both the GraphQL query string and the response decoder automatically.
-
 ## Features
 
 - 🔒 **Type-safe** - Query structure and decoder always match

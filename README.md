@@ -112,7 +112,7 @@ field.object("posts", posts_builder)
 
 ## Fragments
 
-Fragments allow you to reuse common field selections across multiple queries. As of version 1.0.0, fragments are **automatically collected** when you use `fragment.spread()` - no need to manually register them with `operation.fragment()`!
+Fragments allow you to reuse common field selections across multiple queries.
 
 ### Defining Fragments
 

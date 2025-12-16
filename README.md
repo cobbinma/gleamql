@@ -110,6 +110,89 @@ field.object("posts", posts_builder)
 |> field.arg_int("limit", 10)
 ```
 
+## Fragments
+
+Fragments allow you to reuse common field selections across multiple queries. As of version 1.0.0, fragments are **automatically collected** when you use `fragment.spread()` - no need to manually register them with `operation.fragment()`!
+
+### Defining Fragments
+
+```gleam
+import gleamql/fragment
+
+// Define a reusable fragment
+let user_fields = 
+  fragment.on("User", "UserFields", fn() {
+    use id <- field.field(field.id("id"))
+    use name <- field.field(field.string("name"))
+    use email <- field.field(field.string("email"))
+    field.build(#(id, name, email))
+  })
+```
+
+### Using Fragments in Queries
+
+```gleam
+// Just use fragment.spread() - it's automatically included!
+operation.query("GetUsers")
+|> operation.field(
+  field.list(
+    field.object("users", fn() {
+      use user_data <- field.field(fragment.spread(user_fields))
+      let #(id, name, email) = user_data
+      field.build(User(id:, name:, email:))
+    })
+  )
+)
+```
+
+This generates:
+```graphql
+query GetUsers {
+  users {
+    ...UserFields
+  }
+}
+
+fragment UserFields on User {
+  id
+  name
+  email
+}
+```
+
+### Multiple Fragments
+
+You can use multiple fragments in a single operation - they're all auto-collected:
+
+```gleam
+operation.query("GetPost")
+|> operation.variable("id", "ID!")
+|> operation.field(
+  field.object("post", fn() {
+    use author <- field.field(fragment.spread(user_fields))
+    use comments <- field.field(
+      field.list(
+        field.object("comments", fn() {
+          use comment_data <- field.field(fragment.spread(comment_fields))
+          field.build(comment_data)
+        })
+      )
+    )
+    field.build(Post(author:, comments:))
+  })
+)
+```
+
+### Combining Fragments with Regular Fields
+
+```gleam
+field.object("post", fn() {
+  use author <- field.field(fragment.spread(user_fields))
+  use created_at <- field.field(field.string("createdAt"))
+  field.build(Post(author:, created_at:))
+})
+```
+
 ## Operations
 
 ### Queries

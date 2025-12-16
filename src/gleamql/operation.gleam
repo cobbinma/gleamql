@@ -23,6 +23,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import gleamql/field.{type Field}
+import gleamql/fragment
 
 // TYPES -----------------------------------------------------------------------
 
@@ -36,6 +37,7 @@ pub opaque type Operation(a) {
     root_field: Field(a),
     query_string: String,
     variables_list: List(String),
+    fragments: List(String),
   )
 }
 
@@ -59,6 +61,7 @@ pub opaque type OperationBuilder(a) {
     operation_type: OperationType,
     name: Option(String),
     variables: List(VariableDef),
+    fragments: List(String),
   )
 }
 
@@ -76,7 +79,12 @@ pub opaque type OperationBuilder(a) {
 /// ```
 ///
 pub fn query(name: String) -> OperationBuilder(a) {
-  OperationBuilder(operation_type: Query, name: Some(name), variables: [])
+  OperationBuilder(
+    operation_type: Query,
+    name: Some(name),
+    variables: [],
+    fragments: [],
+  )
 }
 
 /// Create a named mutation operation.
@@ -91,7 +99,12 @@ pub fn query(name: String) -> OperationBuilder(a) {
 /// ```
 ///
 pub fn mutation(name: String) -> OperationBuilder(a) {
-  OperationBuilder(operation_type: Mutation, name: Some(name), variables: [])
+  OperationBuilder(
+    operation_type: Mutation,
+    name: Some(name),
+    variables: [],
+    fragments: [],
+  )
 }
 
 /// Create an anonymous query operation.
@@ -107,7 +120,12 @@ pub fn mutation(name: String) -> OperationBuilder(a) {
 /// ```
 ///
 pub fn anonymous_query() -> OperationBuilder(a) {
-  OperationBuilder(operation_type: Query, name: None, variables: [])
+  OperationBuilder(
+    operation_type: Query,
+    name: None,
+    variables: [],
+    fragments: [],
+  )
 }
 
 /// Create an anonymous mutation operation.
@@ -121,7 +139,12 @@ pub fn anonymous_query() -> OperationBuilder(a) {
 /// ```
 ///
 pub fn anonymous_mutation() -> OperationBuilder(a) {
-  OperationBuilder(operation_type: Mutation, name: None, variables: [])
+  OperationBuilder(
+    operation_type: Mutation,
+    name: None,
+    variables: [],
+    fragments: [],
+  )
 }
 
 // BUILDERS --------------------------------------------------------------------
@@ -150,20 +173,91 @@ pub fn variable(
   name: String,
   type_def: String,
 ) -> OperationBuilder(a) {
-  let OperationBuilder(operation_type: op_type, name: op_name, variables: vars) =
-    builder
+  let OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: vars,
+    fragments: frags,
+  ) = builder
 
   let new_var = VariableDef(name: name, type_def: type_def)
 
-  OperationBuilder(operation_type: op_type, name: op_name, variables: [
-    new_var,
-    ..vars
-  ])
+  OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: [new_var, ..vars],
+    fragments: frags,
+  )
+}
+
+/// Add a fragment definition to the operation (optional).
+///
+/// **Note:** As of version 1.0.0, fragments are automatically collected when
+/// you use `fragment.spread()`, so this function is **optional**. You only need
+/// to use it if you want to explicitly register a fragment that isn't used in
+/// the current operation's fields.
+///
+/// For most use cases, simply use `fragment.spread()` in your field selections
+/// and the fragment will be automatically included.
+///
+/// ## Example (modern approach - auto-collection)
+///
+/// ```gleam
+/// import gleamql/fragment
+///
+/// let user_fields = fragment.on("User", "UserFields", fn() {
+///   use id <- field.field(field.id("id"))
+///   use name <- field.field(field.string("name"))
+///   field.build(User(id:, name:))
+/// })
+///
+/// // No need to call operation.fragment() - it's auto-collected!
+/// operation.query("GetUser")
+/// |> operation.variable("id", "ID!")
+/// |> operation.field(
+///   field.object("user", fn() {
+///     use user_data <- field.field(fragment.spread(user_fields))
+///     field.build(user_data)
+///   })
+/// )
+/// ```
+///
+/// ## Example (legacy approach - manual registration)
+///
+/// ```gleam
+/// // You can still manually register if needed
+/// operation.query("GetUser")
+/// |> operation.fragment(user_fields)  // Optional - for backwards compatibility
+/// |> operation.variable("id", "ID!")
+/// |> operation.field(user_field())
+/// ```
+///
+pub fn fragment(
+  builder: OperationBuilder(a),
+  frag: fragment.Fragment(b),
+) -> OperationBuilder(a) {
+  let OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: vars,
+    fragments: frags,
+  ) = builder
+
+  let frag_def = fragment.to_definition(frag)
+
+  OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: vars,
+    fragments: [frag_def, ..frags],
+  )
 }
 
 /// Set the root field for the operation and build the final Operation.
 ///
 /// This completes the operation builder and generates the GraphQL query string.
+/// Fragments used in the field tree are automatically collected and included
+/// in the operation.
 ///
 /// ## Example
 ///
@@ -175,11 +269,23 @@ pub fn variable(
 /// ```
 ///
 pub fn field(builder: OperationBuilder(a), root_field: Field(a)) -> Operation(a) {
-  let OperationBuilder(operation_type: op_type, name: op_name, variables: vars) =
-    builder
+  let OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: vars,
+    fragments: manual_frags,
+  ) = builder
+
+  // Collect fragments from the field tree
+  let field_frags = field.fragments(root_field)
+
+  // Combine manual fragments (from operation.fragment()) with auto-collected ones
+  // Remove duplicates by using list.unique (need to import set or dedupe manually)
+  let all_frags = list.append(manual_frags, field_frags) |> dedupe_strings()
 
   // Generate the query string
-  let query_string = build_query_string(op_type, op_name, vars, root_field)
+  let query_string =
+    build_query_string(op_type, op_name, vars, root_field, all_frags)
 
   // Extract variable names for the request
   let variables_list =
@@ -193,6 +299,7 @@ pub fn field(builder: OperationBuilder(a), root_field: Field(a)) -> Operation(a)
     root_field: root_field,
     query_string: query_string,
     variables_list: variables_list,
+    fragments: all_frags,
   )
 }
 
@@ -204,6 +311,24 @@ pub fn build(operation: Operation(a)) -> Operation(a) {
 
 // QUERY GENERATION ------------------------------------------------------------
 
+/// Deduplicate a list of strings while preserving order.
+///
+fn dedupe_strings(strings: List(String)) -> List(String) {
+  do_dedupe(strings, [])
+}
+
+fn do_dedupe(strings: List(String), seen: List(String)) -> List(String) {
+  case strings {
+    [] -> list.reverse(seen)
+    [first, ..rest] -> {
+      case list.contains(seen, first) {
+        True -> do_dedupe(rest, seen)
+        False -> do_dedupe(rest, [first, ..seen])
+      }
+    }
+  }
+}
+
 /// Build the complete GraphQL query string.
 ///
 fn build_query_string(
@@ -211,6 +336,7 @@ fn build_query_string(
   op_name: Option(String),
   vars: List(VariableDef),
   root_field: Field(a),
+  fragments: List(String),
 ) -> String {
   let operation_keyword = case op_type {
     Query -> "query"
@@ -236,7 +362,20 @@ fn build_query_string(
 
   let selection = field.to_selection(root_field)
 
-  operation_keyword <> name_part <> variables_part <> " { " <> selection <> " }"
+  let fragments_part = case fragments {
+    [] -> ""
+    frags -> {
+      "\n\n" <> string.join(list.reverse(frags), "\n\n")
+    }
+  }
+
+  operation_keyword
+  <> name_part
+  <> variables_part
+  <> " { "
+  <> selection
+  <> " }"
+  <> fragments_part
 }
 
 // ACCESSORS -------------------------------------------------------------------

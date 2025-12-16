@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Fragment support for reusing common field selections per GraphQL specification
+- New `gleamql/fragment` module with `on()` and `spread()` functions
+- `operation.fragment()` to register fragment definitions with operations
+- Full support for named fragments with type conditions
+- Fragment spreads can be combined with regular fields in object builders
+
+### Internal Changes
+
+- Extended `SelectionSet` type in `gleamql/field` to support `FragmentSpread` variant
+- Updated query string generation to append fragment definitions
+- Enhanced decoder composition to handle fragment spreads inline
+
 ## [0.5.0] - 2025-12-15
 
 ### Changed - BREAKING
@@ -126,8 +142,7 @@ See the [README.md](README.md#migrating-from-v04x) for a detailed migration guid
 
 - Only single root field per operation (multiple fields planned for future release)
 - No support for aliases yet
-- No support for fragments yet
-- Union types not yet supported
+- Union types and inline fragments not yet supported (planned for future release)
 
 ---
 

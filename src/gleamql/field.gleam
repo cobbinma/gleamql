@@ -38,6 +38,7 @@ pub opaque type Field(a) {
     args: List(#(String, Argument)),
     selection: SelectionSet,
     decoder: Decoder(a),
+    fragments: List(String),
   )
 }
 
@@ -48,6 +49,8 @@ pub type SelectionSet {
   Scalar
   /// An object field with nested field selections
   Object(fields: String)
+  /// A fragment spread: ...FragmentName
+  FragmentSpread(name: String)
 }
 
 /// Arguments that can be passed to GraphQL fields.
@@ -92,6 +95,7 @@ pub fn string(name: String) -> Field(String) {
     args: [],
     selection: Scalar,
     decoder: decode.string,
+    fragments: [],
   )
 }
 
@@ -112,6 +116,7 @@ pub fn int(name: String) -> Field(Int) {
     args: [],
     selection: Scalar,
     decoder: decode.int,
+    fragments: [],
   )
 }
 
@@ -132,6 +137,7 @@ pub fn float(name: String) -> Field(Float) {
     args: [],
     selection: Scalar,
     decoder: decode.float,
+    fragments: [],
   )
 }
 
@@ -152,6 +158,7 @@ pub fn bool(name: String) -> Field(Bool) {
     args: [],
     selection: Scalar,
     decoder: decode.bool,
+    fragments: [],
   )
 }
 
@@ -174,6 +181,7 @@ pub fn id(name: String) -> Field(String) {
     args: [],
     selection: Scalar,
     decoder: decode.string,
+    fragments: [],
   )
 }
 
@@ -199,6 +207,7 @@ pub fn optional(field: Field(a)) -> Field(Option(a)) {
     args: args,
     selection: selection,
     decoder: dec,
+    fragments: fragments,
   ) = field
 
   Field(
@@ -207,6 +216,7 @@ pub fn optional(field: Field(a)) -> Field(Option(a)) {
     args: args,
     selection: selection,
     decoder: decode.optional(dec),
+    fragments: fragments,
   )
 }
 
@@ -242,6 +252,7 @@ pub fn list(field: Field(a)) -> Field(List(a)) {
     args: args,
     selection: selection,
     decoder: dec,
+    fragments: fragments,
   ) = field
 
   Field(
@@ -250,6 +261,7 @@ pub fn list(field: Field(a)) -> Field(List(a)) {
     args: args,
     selection: selection,
     decoder: decode.list(dec),
+    fragments: fragments,
   )
 }
 
@@ -258,7 +270,11 @@ pub fn list(field: Field(a)) -> Field(List(a)) {
 /// Internal type for building object field selections.
 ///
 pub opaque type ObjectBuilder(a) {
-  ObjectBuilder(fields: List(String), decoder: Decoder(a))
+  ObjectBuilder(
+    fields: List(String),
+    decoder: Decoder(a),
+    fragments: List(String),
+  )
 }
 
 /// Build an object field with multiple nested fields using a codec-style builder.
@@ -302,7 +318,7 @@ pub opaque type ObjectBuilder(a) {
 /// ```
 ///
 pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
-  let ObjectBuilder(fields: fields, decoder: dec) = builder()
+  let ObjectBuilder(fields: fields, decoder: dec, fragments: frags) = builder()
 
   let fields_string = string.join(fields, " ")
 
@@ -313,6 +329,7 @@ pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
     args: [],
     selection: Object(fields_string),
     decoder: dec,
+    fragments: frags,
   )
 }
 
@@ -338,24 +355,40 @@ pub fn field(fld: Field(b), next: fn(b) -> ObjectBuilder(a)) -> ObjectBuilder(a)
     option.None -> fld.name
   }
   let field_decoder = fld.decoder
+  let field_fragments = fld.fragments
 
   // The fields list accumulator - we need to evaluate the continuation
   // to get its field list, using a decoder that never actually runs
-  let ObjectBuilder(fields: next_fields, ..) = next(placeholder_value())
+  let ObjectBuilder(fields: next_fields, fragments: next_fragments, ..) =
+    next(placeholder_value())
 
   // Create a decoder that decodes this field and passes it to the next step
-  let combined_decoder = {
-    use value <- decode.then({
-      use dyn <- decode.field(field_name, field_decoder)
-      decode.success(dyn)
-    })
-    let ObjectBuilder(decoder: next_decoder, ..) = next(value)
-    next_decoder
+  // Special handling for fragment spreads - they don't have a field wrapper
+  let combined_decoder = case fld.selection {
+    FragmentSpread(_) -> {
+      // Fragment fields are spread inline, so don't wrap in decode.field()
+      use value <- decode.then(field_decoder)
+      let ObjectBuilder(decoder: next_decoder, ..) = next(value)
+      next_decoder
+    }
+    _ -> {
+      // Regular fields need decode.field() wrapper
+      use value <- decode.then({
+        use dyn <- decode.field(field_name, field_decoder)
+        decode.success(dyn)
+      })
+      let ObjectBuilder(decoder: next_decoder, ..) = next(value)
+      next_decoder
+    }
   }
+
+  // Collect fragments from this field and all subsequent fields
+  let all_fragments = list.append(field_fragments, next_fragments)
 
   ObjectBuilder(
     fields: [field_selection, ..next_fields],
     decoder: combined_decoder,
+    fragments: all_fragments,
   )
 }
 
@@ -403,7 +436,7 @@ pub fn field_as(
 /// ```
 ///
 pub fn build(value: a) -> ObjectBuilder(a) {
-  ObjectBuilder(fields: [], decoder: decode.success(value))
+  ObjectBuilder(fields: [], decoder: decode.success(value), fragments: [])
 }
 
 /// Create a placeholder value for extracting field lists.
@@ -599,6 +632,7 @@ pub fn to_selection(field: Field(a)) -> String {
   let selection_string = case selection {
     Scalar -> ""
     Object(fields) -> " { " <> fields <> " }"
+    FragmentSpread(frag_name) -> "..." <> frag_name
   }
 
   alias_prefix <> name <> args_string <> selection_string
@@ -669,3 +703,65 @@ fn int_to_string(i: Int) -> String
 @external(erlang, "gleam_stdlib", "float_to_string")
 @external(javascript, "../gleam_stdlib.mjs", "float_to_string")
 fn float_to_string(f: Float) -> String
+
+// FRAGMENT SUPPORT ------------------------------------------------------------
+
+/// Create a field from a fragment spread (internal use by fragment module).
+///
+/// This creates a field that represents a fragment spread (...FragmentName)
+/// in the GraphQL query. The field has an empty name since fragment spreads
+/// don't have field names.
+///
+pub fn from_fragment_spread(
+  fragment_name: String,
+  fragment_decoder: Decoder(a),
+) -> Field(a) {
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    selection: FragmentSpread(fragment_name),
+    decoder: fragment_decoder,
+    fragments: [],
+  )
+}
+
+/// Create a field from a fragment spread with the fragment definition (internal use by fragment module).
+///
+pub fn from_fragment_spread_with_definition(
+  fragment_name: String,
+  fragment_decoder: Decoder(a),
+  fragment_definition: String,
+) -> Field(a) {
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    selection: FragmentSpread(fragment_name),
+    decoder: fragment_decoder,
+    fragments: [fragment_definition],
+  )
+}
+
+/// Get the fragments used by this field (internal use).
+///
+pub fn fragments(field: Field(a)) -> List(String) {
+  field.fragments
+}
+
+/// Extract the selection string from an ObjectBuilder (internal use).
+///
+/// This is used by the fragment module to get the field selection string
+/// from an ObjectBuilder.
+///
+pub fn object_builder_to_selection(builder: ObjectBuilder(a)) -> String {
+  let ObjectBuilder(fields: fields, ..) = builder
+  string.join(fields, " ")
+}
+
+/// Get the decoder from an ObjectBuilder (internal use).
+///
+pub fn object_builder_decoder(builder: ObjectBuilder(a)) -> Decoder(a) {
+  let ObjectBuilder(decoder: dec, ..) = builder
+  dec
+}

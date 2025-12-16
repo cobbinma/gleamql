@@ -34,6 +34,7 @@ import gleam/string
 pub opaque type Field(a) {
   Field(
     name: String,
+    alias: Option(String),
     args: List(#(String, Argument)),
     selection: SelectionSet,
     decoder: Decoder(a),
@@ -85,7 +86,13 @@ pub type Argument {
 /// ```
 ///
 pub fn string(name: String) -> Field(String) {
-  Field(name: name, args: [], selection: Scalar, decoder: decode.string)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Scalar,
+    decoder: decode.string,
+  )
 }
 
 /// Create an Int field.
@@ -99,7 +106,13 @@ pub fn string(name: String) -> Field(String) {
 /// ```
 ///
 pub fn int(name: String) -> Field(Int) {
-  Field(name: name, args: [], selection: Scalar, decoder: decode.int)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Scalar,
+    decoder: decode.int,
+  )
 }
 
 /// Create a Float field.
@@ -113,7 +126,13 @@ pub fn int(name: String) -> Field(Int) {
 /// ```
 ///
 pub fn float(name: String) -> Field(Float) {
-  Field(name: name, args: [], selection: Scalar, decoder: decode.float)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Scalar,
+    decoder: decode.float,
+  )
 }
 
 /// Create a Bool field.
@@ -127,7 +146,13 @@ pub fn float(name: String) -> Field(Float) {
 /// ```
 ///
 pub fn bool(name: String) -> Field(Bool) {
-  Field(name: name, args: [], selection: Scalar, decoder: decode.bool)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Scalar,
+    decoder: decode.bool,
+  )
 }
 
 /// Create an ID field (decoded as String).
@@ -143,7 +168,13 @@ pub fn bool(name: String) -> Field(Bool) {
 /// ```
 ///
 pub fn id(name: String) -> Field(String) {
-  Field(name: name, args: [], selection: Scalar, decoder: decode.string)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Scalar,
+    decoder: decode.string,
+  )
 }
 
 // CONTAINER TYPES -------------------------------------------------------------
@@ -162,10 +193,17 @@ pub fn id(name: String) -> Field(String) {
 /// ```
 ///
 pub fn optional(field: Field(a)) -> Field(Option(a)) {
-  let Field(name: name, args: args, selection: selection, decoder: dec) = field
+  let Field(
+    name: name,
+    alias: alias,
+    args: args,
+    selection: selection,
+    decoder: dec,
+  ) = field
 
   Field(
     name: name,
+    alias: alias,
     args: args,
     selection: selection,
     decoder: decode.optional(dec),
@@ -198,9 +236,21 @@ pub fn optional(field: Field(a)) -> Field(Option(a)) {
 /// ```
 ///
 pub fn list(field: Field(a)) -> Field(List(a)) {
-  let Field(name: name, args: args, selection: selection, decoder: dec) = field
+  let Field(
+    name: name,
+    alias: alias,
+    args: args,
+    selection: selection,
+    decoder: dec,
+  ) = field
 
-  Field(name: name, args: args, selection: selection, decoder: decode.list(dec))
+  Field(
+    name: name,
+    alias: alias,
+    args: args,
+    selection: selection,
+    decoder: decode.list(dec),
+  )
 }
 
 // OBJECT BUILDER --------------------------------------------------------------
@@ -257,7 +307,13 @@ pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
   let fields_string = string.join(fields, " ")
 
   // Don't wrap the decoder here - let field.field() or operation root do it
-  Field(name: name, args: [], selection: Object(fields_string), decoder: dec)
+  Field(
+    name: name,
+    alias: option.None,
+    args: [],
+    selection: Object(fields_string),
+    decoder: dec,
+  )
 }
 
 /// Add a field to the object being built.
@@ -277,7 +333,10 @@ pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
 ///
 pub fn field(fld: Field(b), next: fn(b) -> ObjectBuilder(a)) -> ObjectBuilder(a) {
   let field_selection = to_selection(fld)
-  let field_name = fld.name
+  let field_name = case fld.alias {
+    option.Some(alias) -> alias
+    option.None -> fld.name
+  }
   let field_decoder = fld.decoder
 
   // The fields list accumulator - we need to evaluate the continuation
@@ -298,6 +357,35 @@ pub fn field(fld: Field(b), next: fn(b) -> ObjectBuilder(a)) -> ObjectBuilder(a)
     fields: [field_selection, ..next_fields],
     decoder: combined_decoder,
   )
+}
+
+/// Add a field with an alias to the object being built.
+///
+/// This function is similar to `field()` but allows you to specify an alias
+/// for the field. The alias will be used as the key in the response object.
+///
+/// ## Example
+///
+/// ```gleam
+/// field.object("user", fn() {
+///   use small_pic <- field.field_as("smallPic", 
+///     field.string("profilePic") 
+///     |> field.arg_int("size", 64))
+///   use large_pic <- field.field_as("largePic",
+///     field.string("profilePic")
+///     |> field.arg_int("size", 1024))
+///   field.build(#(small_pic, large_pic))
+/// })
+/// // Generates: user { smallPic: profilePic(size: 64) largePic: profilePic(size: 1024) }
+/// ```
+///
+pub fn field_as(
+  alias: String,
+  fld: Field(b),
+  next: fn(b) -> ObjectBuilder(a),
+) -> ObjectBuilder(a) {
+  let aliased_field = Field(..fld, alias: option.Some(alias))
+  field(aliased_field, next)
 }
 
 /// Complete the object with a constructor.
@@ -486,7 +574,13 @@ pub fn arg_list(
 /// This is an internal function used to generate the actual GraphQL query text.
 ///
 pub fn to_selection(field: Field(a)) -> String {
-  let Field(name: name, args: args, selection: selection, ..) = field
+  let Field(name: name, alias: alias, args: args, selection: selection, ..) =
+    field
+
+  let alias_prefix = case alias {
+    option.Some(a) -> a <> ": "
+    option.None -> ""
+  }
 
   let args_string = case args {
     [] -> ""
@@ -507,7 +601,7 @@ pub fn to_selection(field: Field(a)) -> String {
     Object(fields) -> " { " <> fields <> " }"
   }
 
-  name <> args_string <> selection_string
+  alias_prefix <> name <> args_string <> selection_string
 }
 
 /// Get the decoder for a field.

@@ -3,7 +3,7 @@
 [![Package Version](https://img.shields.io/hexpm/v/gleamql)](https://hex.pm/packages/gleamql)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/gleamql/)
 
-A type-safe GraphQL client for Gleam that keeps your queries and decoders perfectly in sync.
+A type-safe GraphQL client for Gleam.
 
 ## Installation
 

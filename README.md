@@ -3,7 +3,7 @@
 [![Package Version](https://img.shields.io/hexpm/v/gleamql)](https://hex.pm/packages/gleamql)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/gleamql/)
 
-A type-safe GraphQL client for Gleam that keeps your queries and decoders perfectly in sync.
+A type-safe GraphQL client for Gleam.
 
 ## Installation
 
@@ -80,6 +80,20 @@ field.object("user", fn() {
 })
 ```
 
+### Mutations
+
+```gleam
+operation.mutation("CreatePost")
+|> operation.variable("input", "CreatePostInput!")
+|> operation.field(
+  field.object("createPost", fn() {
+    use id <- field.field(field.id("id"))
+    field.build(Post(id:))
+  })
+  |> field.arg("input", "input")
+)
+```
+
 ### Fragments
 
 Reuse field selections across queries:
@@ -132,20 +146,6 @@ import gleamql/directive
 field.string("email")
 |> field.with_directive(directive.include("showEmail"))
 // Generates: email @include(if: $showEmail)
-```
-
-### Mutations
-
-```gleam
-operation.mutation("CreatePost")
-|> operation.variable("input", "CreatePostInput!")
-|> operation.field(
-  field.object("createPost", fn() {
-    use id <- field.field(field.id("id"))
-    field.build(Post(id:))
-  })
-  |> field.arg("input", "input")
-)
 ```
 
 ## Documentation

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multiple root fields support** for querying multiple top-level fields in a single operation
+  - New `operation.root()` function using builder pattern for type-safe multiple root fields
+  - Phantom root pattern ensures clean GraphQL generation without wrapper fields
+  - Full backward compatibility - existing `operation.field()` continues to work
+  - Supports all existing features: variables, aliases, fragments, directives
+  - See README for examples and test/multiple_root_fields_test.gleam for comprehensive usage
 - **Inline fragment support** for querying GraphQL unions and interfaces per GraphQL specification
   - `field.inline_on()` for inline fragments with type conditions (e.g., `... on User { name }`)
   - `field.inline()` for inline fragments without type conditions (directive grouping)
@@ -27,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal Changes
 
+- Added `PhantomRoot` variant to `SelectionSet` type in `gleamql/field`
+- New `field.phantom_root()` internal constructor for phantom root fields
+- New `field.is_phantom_root()` helper to detect phantom roots
+- Updated `operation.decoder()` to handle phantom root field decoding
+- Updated `field.to_selection()` to render phantom roots without field wrapper
 - Extended `SelectionSet` type in `gleamql/field` to support `InlineFragment` variant
 - Updated `to_selection()` to generate inline fragment syntax with proper directive placement
 - Enhanced decoder composition to handle inline fragment fields spreading into parent

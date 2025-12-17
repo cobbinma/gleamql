@@ -1,6 +1,4 @@
 import gleam/io
-import gleam/json
-import gleamql
 import gleamql/field
 import gleamql/operation
 

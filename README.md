@@ -193,6 +193,116 @@ field.object("post", fn() {
 })
 ```
 
+## Directives
+
+Directives provide a way to conditionally include or skip fields, and to add metadata to your queries. gleamql supports all standard GraphQL directives.
+
+### @skip and @include
+
+Conditionally include or exclude fields based on variable values:
+
+```gleam
+import gleamql/directive
+
+// Skip a field based on a variable
+operation.query("GetUser")
+|> operation.variable("id", "ID!")
+|> operation.variable("skipEmail", "Boolean!")
+|> operation.field(
+  field.object("user", fn() {
+    use name <- field.field(field.string("name"))
+    use email <- field.field(
+      field.string("email")
+      |> field.with_directive(directive.skip("skipEmail"))
+    )
+    field.build(User(name:, email:))
+  })
+  |> field.arg("id", "id")
+)
+```
+
+This generates:
+```graphql
+query GetUser($id: ID!, $skipEmail: Boolean!) {
+  user(id: $id) {
+    name
+    email @skip(if: $skipEmail)
+  }
+}
+```
+
+### @include with Inline Values
+
+You can also use inline boolean values instead of variables:
+
+```gleam
+field.string("email")
+|> field.with_directive(directive.include_if(True))
+// Generates: email @include(if: true)
+
+field.string("phone")
+|> field.with_directive(directive.skip_if(False))
+// Generates: phone @skip(if: false)
+```
+
+### Multiple Directives
+
+You can apply multiple directives to a single field:
+
+```gleam
+field.string("profile")
+|> field.with_directive(directive.include("showProfile"))
+|> field.with_directive(directive.skip("hideProfile"))
+// Generates: profile @include(if: $showProfile) @skip(if: $hideProfile)
+
+// Or use with_directives for multiple at once:
+field.string("profile")
+|> field.with_directives([
+  directive.include("showProfile"),
+  directive.skip("hideProfile"),
+])
+```
+
+### Directives on Fragment Spreads
+
+Directives can also be applied to fragment spreads:
+
+```gleam
+let user_fields = 
+  fragment.on("User", "UserFields", fn() {
+    use id <- field.field(field.id("id"))
+    use name <- field.field(field.string("name"))
+    field.build(User(id:, name:))
+  })
+  |> fragment.with_directive(directive.include("includeUserData"))
+
+field.object("data", fn() {
+  use user <- field.field(fragment.spread(user_fields))
+  field.build(user)
+})
+// Generates: data { ...UserFields @include(if: $includeUserData) }
+```
+
+### Custom Directives
+
+You can create custom directives for server-specific functionality:
+
+```gleam
+directive.new("customDirective")
+|> directive.with_arg("arg1", directive.InlineString("value"))
+|> directive.with_arg("arg2", directive.InlineInt(42))
+// Generates: @customDirective(arg1: "value", arg2: 42)
+```
+
+### Built-in Directives
+
+gleamql supports all standard GraphQL directives:
+
+- **@skip(if: Boolean!)** - Skip field if condition is true
+- **@include(if: Boolean!)** - Include field if condition is true  
+- **@deprecated(reason: String)** - Mark field as deprecated
+- **@specifiedBy(url: String!)** - Specify scalar specification URL
+
 ## Operations
 
 ### Queries

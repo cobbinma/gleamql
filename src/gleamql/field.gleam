@@ -23,6 +23,7 @@ import gleam/dynamic/decode.{type Decoder}
 import gleam/list
 import gleam/option.{type Option}
 import gleam/string
+import gleamql/directive.{type Directive}
 
 // TYPES -----------------------------------------------------------------------
 
@@ -36,6 +37,7 @@ pub opaque type Field(a) {
     name: String,
     alias: Option(String),
     args: List(#(String, Argument)),
+    directives: List(Directive),
     selection: SelectionSet,
     decoder: Decoder(a),
     fragments: List(String),
@@ -93,6 +95,7 @@ pub fn string(name: String) -> Field(String) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Scalar,
     decoder: decode.string,
     fragments: [],
@@ -114,6 +117,7 @@ pub fn int(name: String) -> Field(Int) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Scalar,
     decoder: decode.int,
     fragments: [],
@@ -135,6 +139,7 @@ pub fn float(name: String) -> Field(Float) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Scalar,
     decoder: decode.float,
     fragments: [],
@@ -156,6 +161,7 @@ pub fn bool(name: String) -> Field(Bool) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Scalar,
     decoder: decode.bool,
     fragments: [],
@@ -179,6 +185,7 @@ pub fn id(name: String) -> Field(String) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Scalar,
     decoder: decode.string,
     fragments: [],
@@ -205,6 +212,7 @@ pub fn optional(field: Field(a)) -> Field(Option(a)) {
     name: name,
     alias: alias,
     args: args,
+    directives: directives,
     selection: selection,
     decoder: dec,
     fragments: fragments,
@@ -214,6 +222,7 @@ pub fn optional(field: Field(a)) -> Field(Option(a)) {
     name: name,
     alias: alias,
     args: args,
+    directives: directives,
     selection: selection,
     decoder: decode.optional(dec),
     fragments: fragments,
@@ -250,6 +259,7 @@ pub fn list(field: Field(a)) -> Field(List(a)) {
     name: name,
     alias: alias,
     args: args,
+    directives: directives,
     selection: selection,
     decoder: dec,
     fragments: fragments,
@@ -259,6 +269,7 @@ pub fn list(field: Field(a)) -> Field(List(a)) {
     name: name,
     alias: alias,
     args: args,
+    directives: directives,
     selection: selection,
     decoder: decode.list(dec),
     fragments: fragments,
@@ -327,6 +338,7 @@ pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
     name: name,
     alias: option.None,
     args: [],
+    directives: [],
     selection: Object(fields_string),
     decoder: dec,
     fragments: frags,
@@ -480,6 +492,90 @@ pub fn with_args(fld: Field(a), args: List(#(String, Argument))) -> Field(a) {
   Field(..fld, args: args)
 }
 
+/// Add a directive to a field.
+///
+/// Directives modify the behavior of fields at execution time. Common directives
+/// include @skip and @include for conditional field inclusion.
+///
+/// ## Example
+///
+/// ```gleam
+/// import gleamql/directive
+///
+/// field.string("name")
+/// |> field.with_directive(directive.skip("shouldSkipName"))
+/// // Generates: name @skip(if: $shouldSkipName)
+/// ```
+///
+/// Multiple directives can be chained:
+///
+/// ```gleam
+/// field.string("email")
+/// |> field.with_directive(directive.include("showEmail"))
+/// |> field.with_directive(directive.deprecated(Some("Use emailAddress instead")))
+/// // Generates: email @include(if: $showEmail) @deprecated(reason: "Use emailAddress instead")
+/// ```
+///
+pub fn with_directive(fld: Field(a), dir: Directive) -> Field(a) {
+  let Field(
+    name: name,
+    alias: alias,
+    args: args,
+    directives: dirs,
+    selection: selection,
+    decoder: decoder,
+    fragments: fragments,
+  ) = fld
+
+  Field(
+    name: name,
+    alias: alias,
+    args: args,
+    directives: [dir, ..dirs],
+    selection: selection,
+    decoder: decoder,
+    fragments: fragments,
+  )
+}
+
+/// Add multiple directives to a field at once.
+///
+/// This is a convenience function for adding multiple directives in one call.
+///
+/// ## Example
+///
+/// ```gleam
+/// import gleamql/directive
+///
+/// field.string("profile")
+/// |> field.with_directives([
+///   directive.include("showProfile"),
+///   directive.deprecated(Some("Use profileV2")),
+/// ])
+/// ```
+///
+pub fn with_directives(fld: Field(a), dirs: List(Directive)) -> Field(a) {
+  let Field(
+    name: name,
+    alias: alias,
+    args: args,
+    directives: existing_dirs,
+    selection: selection,
+    decoder: decoder,
+    fragments: fragments,
+  ) = fld
+
+  Field(
+    name: name,
+    alias: alias,
+    args: args,
+    directives: list.append(dirs, existing_dirs),
+    selection: selection,
+    decoder: decoder,
+    fragments: fragments,
+  )
+}
+
 /// Add a single variable argument to a field.
 ///
 /// This is a helper for the common case of passing a variable to a field.
@@ -607,8 +703,14 @@ pub fn arg_list(
 /// This is an internal function used to generate the actual GraphQL query text.
 ///
 pub fn to_selection(field: Field(a)) -> String {
-  let Field(name: name, alias: alias, args: args, selection: selection, ..) =
-    field
+  let Field(
+    name: name,
+    alias: alias,
+    args: args,
+    directives: directives,
+    selection: selection,
+    ..,
+  ) = field
 
   let alias_prefix = case alias {
     option.Some(a) -> a <> ": "
@@ -629,13 +731,35 @@ pub fn to_selection(field: Field(a)) -> String {
     }
   }
 
+  let directives_string = case directives {
+    [] -> ""
+    dirs -> {
+      " "
+      <> {
+        dirs
+        |> list.reverse()
+        |> list.map(directive.to_string)
+        |> string.join(" ")
+      }
+    }
+  }
+
   let selection_string = case selection {
     Scalar -> ""
     Object(fields) -> " { " <> fields <> " }"
     FragmentSpread(frag_name) -> "..." <> frag_name
   }
 
-  alias_prefix <> name <> args_string <> selection_string
+  // For fragment spreads, directives come after the spread, not before
+  case selection {
+    FragmentSpread(_) -> alias_prefix <> selection_string <> directives_string
+    _ ->
+      alias_prefix
+      <> name
+      <> args_string
+      <> directives_string
+      <> selection_string
+  }
 }
 
 /// Get the decoder for a field.
@@ -654,7 +778,10 @@ pub fn name(field: Field(a)) -> String {
 
 /// Convert an Argument to its GraphQL string representation.
 ///
-fn argument_to_string(arg: Argument) -> String {
+/// This is used internally to generate GraphQL query strings and is also
+/// exposed for use by the directive module.
+///
+pub fn argument_to_string(arg: Argument) -> String {
   case arg {
     Variable(name) -> "$" <> name
     InlineString(value) -> "\"" <> escape_string(value) <> "\""
@@ -720,6 +847,7 @@ pub fn from_fragment_spread(
     name: "",
     alias: option.None,
     args: [],
+    directives: [],
     selection: FragmentSpread(fragment_name),
     decoder: fragment_decoder,
     fragments: [],
@@ -737,6 +865,26 @@ pub fn from_fragment_spread_with_definition(
     name: "",
     alias: option.None,
     args: [],
+    directives: [],
+    selection: FragmentSpread(fragment_name),
+    decoder: fragment_decoder,
+    fragments: [fragment_definition],
+  )
+}
+
+/// Create a field from a fragment spread with directives (internal use by fragment module).
+///
+pub fn from_fragment_spread_with_directives(
+  fragment_name: String,
+  fragment_decoder: Decoder(a),
+  fragment_definition: String,
+  fragment_directives: List(Directive),
+) -> Field(a) {
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    directives: fragment_directives,
     selection: FragmentSpread(fragment_name),
     decoder: fragment_decoder,
     fragments: [fragment_definition],

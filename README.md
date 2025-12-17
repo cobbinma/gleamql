@@ -80,62 +80,6 @@ field.object("user", fn() {
 })
 ```
 
-### Multiple Root Fields
-
-Query multiple fields at the root level in a single operation:
-
-```gleam
-pub type DashboardData {
-  DashboardData(user: User, posts: List(Post), stats: Stats)
-}
-
-operation.query("GetDashboard")
-|> operation.variable("userId", "ID!")
-|> operation.root(fn() {
-  use user <- field.field(
-    field.object("user", fn() {
-      use name <- field.field(field.string("name"))
-      use email <- field.field(field.string("email"))
-      field.build(User(name:, email:))
-    })
-    |> field.arg("id", "userId")
-  )
-  use posts <- field.field(
-    field.list(field.object("posts", fn() {
-      use title <- field.field(field.string("title"))
-      field.build(Post(title:))
-    }))
-    |> field.arg("authorId", "userId")
-  )
-  use stats <- field.field(
-    field.object("userStats", fn() {
-      use totalPosts <- field.field(field.int("totalPosts"))
-      field.build(Stats(totalPosts:))
-    })
-  )
-  field.build(DashboardData(user:, posts:, stats:))
-})
-```
-
-This generates:
-
-```graphql
-query GetDashboard($userId: ID!) {
-  user(id: $userId) {
-    name
-    email
-  }
-  posts(authorId: $userId) {
-    title
-  }
-  userStats {
-    totalPosts
-  }
-}
-```
-
-**Note:** For single root field operations, you can continue using `operation.field()` as before.
-
 ### Fragments
 
 Reuse field selections across queries:

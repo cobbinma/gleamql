@@ -18,6 +18,27 @@
 //// let nickname_field = field.optional(field.string("nickname"))
 //// ```
 ////
+//// ## Inline Fragments
+////
+//// Inline fragments allow you to conditionally select fields based on type
+//// or to group fields together with directives.
+////
+//// ```gleam
+//// // Querying a union type
+//// field.object("search", fn() {
+////   use user <- field.field(field.inline_on("User", fn() {
+////     use name <- field.field(field.string("name"))
+////     field.build(name)
+////   }))
+////   field.build(user)
+//// })
+//// // Generates: search { ... on User { name } }
+////
+//// // Grouping fields with directives
+//// field.inline(builder)
+//// |> field.with_directive(directive.include("var"))
+//// ```
+////
 
 import gleam/dynamic/decode.{type Decoder}
 import gleam/list
@@ -53,6 +74,8 @@ pub type SelectionSet {
   Object(fields: String)
   /// A fragment spread: ...FragmentName
   FragmentSpread(name: String)
+  /// An inline fragment: ... on TypeName { fields } or ... { fields }
+  InlineFragment(type_condition: Option(String), fields: String)
 }
 
 /// Arguments that can be passed to GraphQL fields.
@@ -375,10 +398,16 @@ pub fn field(fld: Field(b), next: fn(b) -> ObjectBuilder(a)) -> ObjectBuilder(a)
     next(placeholder_value())
 
   // Create a decoder that decodes this field and passes it to the next step
-  // Special handling for fragment spreads - they don't have a field wrapper
+  // Special handling for fragment spreads and inline fragments - they don't have a field wrapper
   let combined_decoder = case fld.selection {
     FragmentSpread(_) -> {
       // Fragment fields are spread inline, so don't wrap in decode.field()
+      use value <- decode.then(field_decoder)
+      let ObjectBuilder(decoder: next_decoder, ..) = next(value)
+      next_decoder
+    }
+    InlineFragment(_, _) -> {
+      // Inline fragment fields are spread inline, so don't wrap in decode.field()
       use value <- decode.then(field_decoder)
       let ObjectBuilder(decoder: next_decoder, ..) = next(value)
       next_decoder
@@ -748,11 +777,21 @@ pub fn to_selection(field: Field(a)) -> String {
     Scalar -> ""
     Object(fields) -> " { " <> fields <> " }"
     FragmentSpread(frag_name) -> "..." <> frag_name
+    InlineFragment(type_cond, fields) -> {
+      let type_part = case type_cond {
+        option.Some(type_name) -> " on " <> type_name
+        option.None -> ""
+      }
+      "..." <> type_part <> directives_string <> " { " <> fields <> " }"
+    }
   }
 
-  // For fragment spreads, directives come after the spread, not before
+  // For fragment spreads and inline fragments, directives have special placement
   case selection {
     FragmentSpread(_) -> alias_prefix <> selection_string <> directives_string
+    InlineFragment(_, _) ->
+      alias_prefix <> selection_string
+    // directives already included in selection_string
     _ ->
       alias_prefix
       <> name
@@ -912,4 +951,115 @@ pub fn object_builder_to_selection(builder: ObjectBuilder(a)) -> String {
 pub fn object_builder_decoder(builder: ObjectBuilder(a)) -> Decoder(a) {
   let ObjectBuilder(decoder: dec, ..) = builder
   dec
+}
+
+// INLINE FRAGMENTS ------------------------------------------------------------
+
+/// Create an inline fragment with a type condition.
+///
+/// Inline fragments with type conditions are used to select fields based on
+/// the runtime type of an interface or union field. This is essential for
+/// querying polymorphic types in GraphQL.
+///
+/// ## Example - Querying a union type
+///
+/// ```gleam
+/// // GraphQL schema:
+/// // union SearchResult = User | Post | Comment
+/// 
+/// field.object("search", fn() {
+///   use user_result <- field.field(
+///     field.inline_on("User", fn() {
+///       use name <- field.field(field.string("name"))
+///       use email <- field.field(field.string("email"))
+///       field.build(UserResult(name:, email:))
+///     })
+///   )
+///   use post_result <- field.field(
+///     field.inline_on("Post", fn() {
+///       use title <- field.field(field.string("title"))
+///       field.build(PostResult(title:))
+///     })
+///   )
+///   field.build(SearchResults(user: user_result, post: post_result))
+/// })
+/// // Generates: search { ... on User { name email } ... on Post { title } }
+/// ```
+///
+/// ## Example - Querying an interface type
+///
+/// ```gleam
+/// field.object("node", fn() {
+///   use common_id <- field.field(field.id("id"))
+///   use user_fields <- field.field(
+///     field.inline_on("User", fn() {
+///       use name <- field.field(field.string("name"))
+///       field.build(name)
+///     })
+///   )
+///   field.build(#(common_id, user_fields))
+/// })
+/// // Generates: node { id ... on User { name } }
+/// ```
+///
+pub fn inline_on(
+  type_condition: String,
+  builder: fn() -> ObjectBuilder(a),
+) -> Field(a) {
+  let object_builder = builder()
+  let selection = object_builder_to_selection(object_builder)
+  let decoder = object_builder_decoder(object_builder)
+
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    directives: [],
+    selection: InlineFragment(
+      type_condition: option.Some(type_condition),
+      fields: selection,
+    ),
+    decoder: decoder,
+    fragments: [],
+  )
+}
+
+/// Create an inline fragment without a type condition.
+///
+/// Inline fragments without type conditions are used to group fields together,
+/// typically to apply directives to multiple fields at once without affecting
+/// the parent type condition.
+///
+/// ## Example - Grouping fields with directives
+///
+/// ```gleam
+/// field.object("user", fn() {
+///   use name <- field.field(field.string("name"))
+///   use private_data <- field.field(
+///     field.inline(fn() {
+///       use email <- field.field(field.string("email"))
+///       use phone <- field.field(field.string("phone"))
+///       field.build(#(email, phone))
+///     })
+///     |> field.with_directive(directive.include("showPrivate"))
+///   )
+///   field.build(User(name:, private: private_data))
+/// })
+/// // Generates: user { name ... @include(if: $showPrivate) { email phone } }
+/// ```
+///
+pub fn inline(builder: fn() -> ObjectBuilder(a)) -> Field(a) {
+  let object_builder = builder()
+  let selection = object_builder_to_selection(object_builder)
+  let decoder = object_builder_decoder(object_builder)
+
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    directives: [],
+    selection: InlineFragment(type_condition: option.None, fields: selection),
+    decoder: decoder,
+    fragments: [],
+  )
 }

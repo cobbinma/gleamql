@@ -76,6 +76,10 @@ pub type SelectionSet {
   FragmentSpread(name: String)
   /// An inline fragment: ... on TypeName { fields } or ... { fields }
   InlineFragment(type_condition: Option(String), fields: String)
+  /// A phantom root for multiple root-level fields.
+  /// This selection type exists only in the builder - it renders its children
+  /// directly without wrapping them in a named field.
+  PhantomRoot(fields: String)
 }
 
 /// Arguments that can be passed to GraphQL fields.
@@ -784,10 +788,12 @@ pub fn to_selection(field: Field(a)) -> String {
       }
       "..." <> type_part <> directives_string <> " { " <> fields <> " }"
     }
+    PhantomRoot(fields) -> fields
   }
 
-  // For fragment spreads and inline fragments, directives have special placement
+  // For fragment spreads, inline fragments, and phantom roots, directives have special placement
   case selection {
+    PhantomRoot(fields) -> fields
     FragmentSpread(_) -> alias_prefix <> selection_string <> directives_string
     InlineFragment(_, _) -> alias_prefix <> selection_string
     // directives already included in selection_string
@@ -1061,4 +1067,64 @@ pub fn inline(builder: fn() -> ObjectBuilder(a)) -> Field(a) {
     decoder: decoder,
     fragments: [],
   )
+}
+
+// PHANTOM ROOT ----------------------------------------------------------------
+
+/// Create a phantom root field for multiple root-level selections.
+///
+/// **Internal use only** - Users should use `operation.root()` instead.
+///
+/// A phantom root exists only in the builder API. When rendered to GraphQL,
+/// its child fields are output directly at the operation level without any
+/// wrapper field. This enables type-safe multiple root field operations.
+///
+/// ## Example
+///
+/// ```gleam
+/// // Internal usage (via operation.root):
+/// let phantom = field.phantom_root(fn() {
+///   use user <- field.field(user_field())
+///   use posts <- field.field(posts_field())
+///   field.build(#(user, posts))
+/// })
+/// ```
+///
+/// Generates: `user { ... } posts { ... }` (no wrapper)
+///
+pub fn phantom_root(builder: fn() -> ObjectBuilder(a)) -> Field(a) {
+  let ObjectBuilder(fields: fields, decoder: dec, fragments: frags) = builder()
+  let fields_string = string.join(fields, " ")
+
+  Field(
+    name: "",
+    alias: option.None,
+    args: [],
+    directives: [],
+    selection: PhantomRoot(fields_string),
+    decoder: dec,
+    fragments: frags,
+  )
+}
+
+/// Check if a field is a phantom root.
+///
+/// Phantom roots are used internally by `operation.root()` to support
+/// multiple root fields while maintaining type safety.
+///
+/// ## Example
+///
+/// ```gleam
+/// let phantom = field.phantom_root(builder)
+/// field.is_phantom_root(phantom)  // -> True
+///
+/// let regular = field.object("user", builder)
+/// field.is_phantom_root(regular)  // -> False
+/// ```
+///
+pub fn is_phantom_root(field: Field(a)) -> Bool {
+  case field.selection {
+    PhantomRoot(_) -> True
+    _ -> False
+  }
 }

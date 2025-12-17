@@ -1,9 +1,10 @@
 //// Operation builders for constructing GraphQL queries and mutations.
 ////
 //// This module provides functions for building complete GraphQL operations
-//// with variable definitions and root fields.
+//// with variable definitions and root fields. It supports both single and
+//// multiple root field operations.
 ////
-//// ## Basic Usage
+//// ## Basic Usage - Single Root Field
 ////
 //// ```gleam
 //// import gleamql/operation
@@ -13,7 +14,30 @@
 ////   operation.query("CountryQuery")
 ////   |> operation.variable("code", "ID!")
 ////   |> operation.field(country_field())
-////   |> operation.build()
+//// ```
+////
+//// ## Multiple Root Fields
+////
+//// Query multiple fields at the root level while maintaining type safety:
+////
+//// ```gleam
+//// operation.query("GetDashboard")
+//// |> operation.variable("userId", "ID!")
+//// |> operation.root(fn() {
+////   use user <- field.field(user_field())
+////   use posts <- field.field(posts_field())
+////   use stats <- field.field(stats_field())
+////   field.build(#(user, posts, stats))
+//// })
+//// ```
+////
+//// This generates clean GraphQL without wrapper fields:
+//// ```graphql
+//// query GetDashboard($userId: ID!) {
+////   user { ... }
+////   posts { ... }
+////   stats { ... }
+//// }
 //// ```
 ////
 
@@ -303,6 +327,85 @@ pub fn field(builder: OperationBuilder(a), root_field: Field(a)) -> Operation(a)
   )
 }
 
+/// Set multiple root fields for the operation using a builder pattern.
+///
+/// This allows you to query multiple root fields in a single operation
+/// while maintaining full type safety. The builder pattern is identical to
+/// `field.object()`, but the generated GraphQL will not wrap the fields
+/// in an additional object.
+///
+/// ## Example
+///
+/// ```gleam
+/// pub type UserAndPosts {
+///   UserAndPosts(user: User, posts: List(Post))
+/// }
+///
+/// operation.query("GetData")
+/// |> operation.variable("userId", "ID!")
+/// |> operation.root(fn() {
+///   use user <- field.field(
+///     field.object("user", user_builder)
+///     |> field.arg("id", "userId")
+///   )
+///   use posts <- field.field(
+///     field.list(field.object("posts", post_builder))
+///     |> field.arg_int("limit", 10)
+///   )
+///   field.build(UserAndPosts(user:, posts:))
+/// })
+/// ```
+///
+/// Generates:
+/// ```graphql
+/// query GetData($userId: ID!) {
+///   user(id: $userId) { ... }
+///   posts(limit: 10) { ... }
+/// }
+/// ```
+///
+/// ## Single Root Field
+///
+/// You can also use `root()` with a single field (though `field()` is simpler):
+///
+/// ```gleam
+/// operation.root(fn() {
+///   use user <- field.field(user_field())
+///   field.build(user)
+/// })
+/// ```
+///
+/// ## Backward Compatibility
+///
+/// The existing `field()` function continues to work for single-field operations.
+/// Use `root()` when you need multiple root fields or want a consistent API.
+///
+pub fn root(
+  builder: OperationBuilder(_),
+  root_builder: fn() -> field.ObjectBuilder(a),
+) -> Operation(a) {
+  let phantom_field = field.phantom_root(root_builder)
+
+  // The OperationBuilder type parameter is phantom, so we can safely reconstruct
+  // it with the correct type by pattern matching and rebuilding
+  let OperationBuilder(
+    operation_type: op_type,
+    name: op_name,
+    variables: vars,
+    fragments: manual_frags,
+  ) = builder
+
+  let typed_builder =
+    OperationBuilder(
+      operation_type: op_type,
+      name: op_name,
+      variables: vars,
+      fragments: manual_frags,
+    )
+
+  field(typed_builder, phantom_field)
+}
+
 /// Alias for `field` that builds the operation.
 ///
 pub fn build(operation: Operation(a)) -> Operation(a) {
@@ -392,15 +495,26 @@ pub fn to_string(operation: Operation(a)) -> String {
 /// GraphQL response.
 ///
 pub fn decoder(operation: Operation(a)) -> Decoder(a) {
-  // Auto-unwrap the "data" field, then decode the root field by name
-  let root_field_name = field.name(operation.root_field)
   let root_field_decoder = field.decoder(operation.root_field)
 
-  use data_value <- decode.field("data", {
-    use field_value <- decode.field(root_field_name, root_field_decoder)
-    decode.success(field_value)
-  })
-  decode.success(data_value)
+  // Check if this is a phantom root (multiple root fields)
+  case field.is_phantom_root(operation.root_field) {
+    True -> {
+      // Phantom root: decode children directly from data object
+      // The phantom root's decoder already handles field-by-field decoding
+      use data_value <- decode.field("data", root_field_decoder)
+      decode.success(data_value)
+    }
+    False -> {
+      // Regular field: decode the named field from data object
+      let root_field_name = field.name(operation.root_field)
+      use data_value <- decode.field("data", {
+        use field_value <- decode.field(root_field_name, root_field_decoder)
+        decode.success(field_value)
+      })
+      decode.success(data_value)
+    }
+  }
 }
 
 /// Get the list of variable names defined in the operation.

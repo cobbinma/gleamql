@@ -30,6 +30,8 @@
 ////
 
 import gleam/dynamic/decode.{type Decoder}
+import gleam/list
+import gleamql/directive.{type Directive}
 import gleamql/field.{type Field, type ObjectBuilder}
 
 // TYPES -----------------------------------------------------------------------
@@ -43,6 +45,7 @@ pub opaque type Fragment(a) {
   Fragment(
     name: String,
     type_condition: String,
+    directives: List(Directive),
     selection: String,
     decoder: Decoder(a),
   )
@@ -92,6 +95,7 @@ pub fn on(
   Fragment(
     name: name,
     type_condition: type_condition,
+    directives: [],
     selection: selection,
     decoder: decoder,
   )
@@ -125,10 +129,90 @@ pub fn on(
 /// ```
 ///
 pub fn spread(fragment: Fragment(a)) -> Field(a) {
-  field.from_fragment_spread_with_definition(
+  field.from_fragment_spread_with_directives(
     fragment.name,
     fragment.decoder,
     to_definition(fragment),
+    fragment.directives,
+  )
+}
+
+/// Add a directive to a fragment spread.
+///
+/// Directives on fragment spreads control whether the fragment is included
+/// in the query at execution time.
+///
+/// ## Example
+///
+/// ```gleam
+/// import gleamql/directive
+///
+/// let user_fields = fragment.on("User", "UserFields", fn() {
+///   use id <- field.field(field.id("id"))
+///   use name <- field.field(field.string("name"))
+///   field.build(User(id:, name:))
+/// })
+///
+/// // Add directive to the fragment spread
+/// let conditional_user = fragment.with_directive(
+///   user_fields,
+///   directive.include("includeUser")
+/// )
+///
+/// // Use in a field
+/// field.object("data", fn() {
+///   use user <- field.field(fragment.spread(conditional_user))
+///   field.build(user)
+/// })
+/// // Generates: data { ...UserFields @include(if: $includeUser) }
+/// ```
+///
+pub fn with_directive(frag: Fragment(a), dir: Directive) -> Fragment(a) {
+  let Fragment(
+    name: name,
+    type_condition: type_cond,
+    directives: dirs,
+    selection: sel,
+    decoder: dec,
+  ) = frag
+
+  Fragment(
+    name: name,
+    type_condition: type_cond,
+    directives: [dir, ..dirs],
+    selection: sel,
+    decoder: dec,
+  )
+}
+
+/// Add multiple directives to a fragment spread at once.
+///
+/// ## Example
+///
+/// ```gleam
+/// import gleamql/directive
+///
+/// fragment.with_directives(user_fields, [
+///   directive.include("showUser"),
+///   directive.skip("hideUser"),
+/// ])
+/// ```
+///
+pub fn with_directives(frag: Fragment(a), dirs: List(Directive)) -> Fragment(a) {
+  let Fragment(
+    name: name,
+    type_condition: type_cond,
+    directives: existing_dirs,
+    selection: sel,
+    decoder: dec,
+  ) = frag
+
+  Fragment(
+    name: name,
+    type_condition: type_cond,
+    directives: list.append(dirs, existing_dirs),
+    selection: sel,
+    decoder: dec,
   )
 }
 

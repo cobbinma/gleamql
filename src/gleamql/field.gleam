@@ -789,8 +789,7 @@ pub fn to_selection(field: Field(a)) -> String {
   // For fragment spreads and inline fragments, directives have special placement
   case selection {
     FragmentSpread(_) -> alias_prefix <> selection_string <> directives_string
-    InlineFragment(_, _) ->
-      alias_prefix <> selection_string
+    InlineFragment(_, _) -> alias_prefix <> selection_string
     // directives already included in selection_string
     _ ->
       alias_prefix

@@ -23,11 +23,7 @@ pub type CommentResult {
 }
 
 pub type SearchResult {
-  SearchResult(
-    user: UserResult,
-    post: PostResult,
-    comment: CommentResult,
-  )
+  SearchResult(user: UserResult, post: PostResult, comment: CommentResult)
 }
 
 /// Query a union type with inline fragments for each possible type.

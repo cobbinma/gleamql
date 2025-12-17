@@ -9,15 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Inline fragment support** for querying GraphQL unions and interfaces per GraphQL specification
+  - `field.inline_on()` for inline fragments with type conditions (e.g., `... on User { name }`)
+  - `field.inline()` for inline fragments without type conditions (directive grouping)
+  - Full support for directives on inline fragments
+  - Nested inline fragments
+  - See `src/inline_fragment_demo.gleam` for comprehensive examples
 - Fragment support for reusing common field selections per GraphQL specification
-- New `gleamql/fragment` module with `on()` and `spread()` functions
-- `operation.fragment()` to register fragment definitions with operations
-- Full support for named fragments with type conditions
-- Fragment spreads can be combined with regular fields in object builders
+  - New `gleamql/fragment` module with `on()` and `spread()` functions
+  - `operation.fragment()` to register fragment definitions with operations
+  - Full support for named fragments with type conditions
+  - Fragment spreads can be combined with regular fields in object builders
+
+### Changed
+
+- Simplified README to focus on main use-cases (comprehensive docs available at hexdocs.pm)
 
 ### Internal Changes
 
-- Extended `SelectionSet` type in `gleamql/field` to support `FragmentSpread` variant
+- Extended `SelectionSet` type in `gleamql/field` to support `InlineFragment` variant
+- Updated `to_selection()` to generate inline fragment syntax with proper directive placement
+- Enhanced decoder composition to handle inline fragment fields spreading into parent
 - Updated query string generation to append fragment definitions
 - Enhanced decoder composition to handle fragment spreads inline
 

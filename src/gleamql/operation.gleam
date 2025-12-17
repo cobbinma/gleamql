@@ -385,7 +385,7 @@ pub fn root(
   root_builder: fn() -> field.ObjectBuilder(a),
 ) -> Operation(a) {
   let phantom_field = field.phantom_root(root_builder)
-  
+
   // The OperationBuilder type parameter is phantom, so we can safely reconstruct
   // it with the correct type by pattern matching and rebuilding
   let OperationBuilder(
@@ -394,14 +394,15 @@ pub fn root(
     variables: vars,
     fragments: manual_frags,
   ) = builder
-  
-  let typed_builder = OperationBuilder(
-    operation_type: op_type,
-    name: op_name,
-    variables: vars,
-    fragments: manual_frags,
-  )
-  
+
+  let typed_builder =
+    OperationBuilder(
+      operation_type: op_type,
+      name: op_name,
+      variables: vars,
+      fragments: manual_frags,
+    )
+
   field(typed_builder, phantom_field)
 }
 
@@ -495,7 +496,7 @@ pub fn to_string(operation: Operation(a)) -> String {
 ///
 pub fn decoder(operation: Operation(a)) -> Decoder(a) {
   let root_field_decoder = field.decoder(operation.root_field)
-  
+
   // Check if this is a phantom root (multiple root fields)
   case field.is_phantom_root(operation.root_field) {
     True -> {

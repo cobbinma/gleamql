@@ -1,8 +1,8 @@
+import gleam/io
+import gleam/json
 import gleamql
 import gleamql/field
 import gleamql/operation
-import gleam/json
-import gleam/io
 
 pub type Country {
   Country(name: String, code: String)
@@ -42,5 +42,7 @@ pub fn main() {
   io.println("Generated GraphQL Query:")
   io.println(operation.to_string(multi_op))
   io.println("")
-  io.println("Notice: No wrapper field! Both 'country' and 'continent' are at the root level.")
+  io.println(
+    "Notice: No wrapper field! Both 'country' and 'continent' are at the root level.",
+  )
 }

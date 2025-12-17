@@ -1095,7 +1095,7 @@ pub fn inline(builder: fn() -> ObjectBuilder(a)) -> Field(a) {
 pub fn phantom_root(builder: fn() -> ObjectBuilder(a)) -> Field(a) {
   let ObjectBuilder(fields: fields, decoder: dec, fragments: frags) = builder()
   let fields_string = string.join(fields, " ")
-  
+
   Field(
     name: "",
     alias: option.None,

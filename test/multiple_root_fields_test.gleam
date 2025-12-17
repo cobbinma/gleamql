@@ -63,11 +63,12 @@ pub fn basic_multiple_root_fields_test() {
 
   // Verify query string format
   let query_string = operation.to_string(multi_op)
-  
+
   // Should contain both fields at root level
   let assert True = string.contains(query_string, "country(code: $countryCode)")
-  let assert True = string.contains(query_string, "continent(code: $continentCode)")
-  
+  let assert True =
+    string.contains(query_string, "continent(code: $continentCode)")
+
   // Should NOT contain a wrapper field like "root {"
   let assert False = string.contains(query_string, "root {")
 
@@ -113,7 +114,7 @@ pub fn three_root_fields_test() {
     })
 
   let query_string = operation.to_string(multi_op)
-  
+
   // Verify all three fields are present
   let assert True = string.contains(query_string, "country(code: $code1)")
   let assert True = string.contains(query_string, "continent(code: $code2)")
@@ -165,18 +166,18 @@ pub fn multiple_roots_with_aliases_test() {
       use uk <- field.field_as(
         "uk",
         country_field()
-        |> field.arg_string("code", "GB"),
+          |> field.arg_string("code", "GB"),
       )
       use us <- field.field_as(
         "us",
         country_field()
-        |> field.arg_string("code", "US"),
+          |> field.arg_string("code", "US"),
       )
       field.build(#(uk, us))
     })
 
   let query_string = operation.to_string(multi_op)
-  
+
   // Verify aliases are in the query
   let assert True = string.contains(query_string, "uk: country")
   let assert True = string.contains(query_string, "us: country")
@@ -220,10 +221,11 @@ pub fn multiple_roots_with_fragments_test() {
     })
 
   let query_string = operation.to_string(multi_op)
-  
+
   // Verify fragment definition appears
-  let assert True = string.contains(query_string, "fragment CountryFields on Country")
-  
+  let assert True =
+    string.contains(query_string, "fragment CountryFields on Country")
+
   // Verify fragment spread is used
   let assert True = string.contains(query_string, "...CountryFields")
 
@@ -301,10 +303,10 @@ pub fn query_string_format_test() {
     })
 
   let query = operation.to_string(multi_op)
-  
+
   // Verify it starts with query keyword
   let assert True = string.starts_with(query, "query TestQuery($id: ID!) {")
-  
+
   // Verify both fields are at root level (no nesting wrapper)
   let assert True = string.contains(query, "country(code: $id)")
   let assert True = string.contains(query, "continent(code: \"EU\")")

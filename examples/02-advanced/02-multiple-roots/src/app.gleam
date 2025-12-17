@@ -1,6 +1,15 @@
+// Demonstrates querying multiple root fields in a single GraphQL operation.
+//
+// This example shows:
+// - Using operation.root() for multiple top-level fields
+// - Querying different data in one request
+// - Structuring responses as tuples
+
 import gleam/io
 import gleamql/field
 import gleamql/operation
+
+// TYPES -----------------------------------------------------------------------
 
 pub type Country {
   Country(name: String, code: String)
@@ -9,6 +18,8 @@ pub type Country {
 pub type Continent {
   Continent(name: String, code: String)
 }
+
+// MAIN ------------------------------------------------------------------------
 
 pub fn main() {
   // Demonstrate multiple root fields

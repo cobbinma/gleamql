@@ -1,0 +1,6 @@
+name = "inline_fragment"
+version = "1.0.0"
+
+[dependencies]
+gleam_stdlib = ">= 0.65.0 and < 1.0.0"
+gleamql = { path = "../../../" }

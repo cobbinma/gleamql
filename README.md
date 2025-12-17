@@ -58,6 +58,28 @@ query CountryQuery($code: ID!) {
 }
 ```
 
+## Examples
+
+Looking for more examples? Check out the [`examples/`](examples/) directory for complete,
+runnable example projects organized by difficulty:
+
+**Basics:**
+- [`01-simple-query`](examples/01-basics/01-simple-query) - Basic query with variables and field selection
+- [`02-mutation`](examples/01-basics/02-mutation) - Creating data with mutations
+
+**Advanced:**
+- [`01-fragment`](examples/02-advanced/01-fragment) - Reusable field selections
+- [`02-multiple-roots`](examples/02-advanced/02-multiple-roots) - Querying multiple fields at once
+- [`03-inline-fragment`](examples/02-advanced/03-inline-fragment) - Working with unions and interfaces
+
+Each example is a self-contained Gleam project. Run any example with:
+```sh
+cd examples/01-basics/01-simple-query
+gleam run
+```
+
+See the [examples README](examples/README.md) for full details.
+
 ## Key Features
 
 ### Building Fields

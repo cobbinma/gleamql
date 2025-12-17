@@ -80,6 +80,20 @@ field.object("user", fn() {
 })
 ```
 
+### Mutations
+
+```gleam
+operation.mutation("CreatePost")
+|> operation.variable("input", "CreatePostInput!")
+|> operation.field(
+  field.object("createPost", fn() {
+    use id <- field.field(field.id("id"))
+    field.build(Post(id:))
+  })
+  |> field.arg("input", "input")
+)
+```
+
 ### Multiple Root Fields
 
 Query multiple fields at the root level in a single operation:
@@ -134,8 +148,6 @@ query GetDashboard($userId: ID!) {
 }
 ```
 
-**Note:** For single root field operations, you can continue using `operation.field()` as before.
-
 ### Fragments
 
 Reuse field selections across queries:
@@ -188,20 +200,6 @@ import gleamql/directive
 field.string("email")
 |> field.with_directive(directive.include("showEmail"))
 // Generates: email @include(if: $showEmail)
-```
-
-### Mutations
-
-```gleam
-operation.mutation("CreatePost")
-|> operation.variable("input", "CreatePostInput!")
-|> operation.field(
-  field.object("createPost", fn() {
-    use id <- field.field(field.id("id"))
-    field.build(Post(id:))
-  })
-  |> field.arg("input", "input")
-)
 ```
 
 ## Documentation

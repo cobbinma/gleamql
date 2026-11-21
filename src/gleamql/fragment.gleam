@@ -198,7 +198,10 @@ pub fn with_directive(frag: Fragment(a), dir: Directive) -> Fragment(a) {
 /// ])
 /// ```
 ///
-pub fn with_directives(frag: Fragment(a), dirs: List(Directive)) -> Fragment(a) {
+pub fn with_directives(
+  frag: Fragment(a),
+  dirs: List(Directive),
+) -> Fragment(a) {
   let Fragment(
     name: name,
     type_condition: type_cond,

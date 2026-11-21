@@ -387,7 +387,10 @@ pub fn object(name: String, builder: fn() -> ObjectBuilder(a)) -> Field(a) {
 /// })
 /// ```
 ///
-pub fn field(fld: Field(b), next: fn(b) -> ObjectBuilder(a)) -> ObjectBuilder(a) {
+pub fn field(
+  fld: Field(b),
+  next: fn(b) -> ObjectBuilder(a),
+) -> ObjectBuilder(a) {
   let field_selection = to_selection(fld)
   let field_name = case fld.alias {
     option.Some(alias) -> alias

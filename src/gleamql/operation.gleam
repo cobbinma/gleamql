@@ -292,7 +292,10 @@ pub fn fragment(
 /// |> operation.build()
 /// ```
 ///
-pub fn field(builder: OperationBuilder(a), root_field: Field(a)) -> Operation(a) {
+pub fn field(
+  builder: OperationBuilder(a),
+  root_field: Field(a),
+) -> Operation(a) {
   let OperationBuilder(
     operation_type: op_type,
     name: op_name,
